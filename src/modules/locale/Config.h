@@ -40,6 +40,7 @@ class Config : public QObject
 public:
     Config( QObject* parent = nullptr );
     ~Config();
+
     CalamaresUtils::Locale::CStringListModel* regionModel() const;
     CalamaresUtils::Locale::CStringListModel* zonesModel() const;
 
@@ -47,20 +48,19 @@ public:
 
     Calamares::JobList createJobs();
     QMap< QString, QString > localesMap();
+
+    /** @brief The status for the summary before the exec: step
+     *
+     * This is a multi-line description of what the locale module
+     * will do; @see ViewStep::prettyStatus().
+     */
     QString prettyStatus() const;
 
+signals:
+    void prettyStatusChanged();
+
 private:
-    CalamaresUtils::Locale::CStringPairList m_regionList;
-    CalamaresUtils::Locale::CStringListModel* m_regionModel;
-    CalamaresUtils::Locale::CStringListModel* m_zonesModel;
-
-    LocaleConfiguration m_selectedLocaleConfiguration;
-
-    QStringList m_localeGenLines;
-    int m_currentRegion = -1;
-
-    bool m_blockTzWidgetSet;
-
+    /// @brief based on available locales, guess a good default
     LocaleConfiguration guessLocaleConfiguration() const;
 
     // For the given locale config, return two strings describing
@@ -78,8 +78,16 @@ private:
 
     const CalamaresUtils::Locale::TZZone* currentLocation() const;
 
-signals:
-    void prettyStatusChanged();
+    CalamaresUtils::Locale::CStringPairList m_regionList;
+    CalamaresUtils::Locale::CStringListModel* m_regionModel;
+    CalamaresUtils::Locale::CStringListModel* m_zonesModel;
+
+    LocaleConfiguration m_selectedLocaleConfiguration;
+
+    QStringList m_localeGenLines;
+    int m_currentRegion = -1;
+
+    bool m_blockTzWidgetSet;
 };
 
 
