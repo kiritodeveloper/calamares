@@ -19,18 +19,19 @@
 
 #include "LocaleQmlViewStep.h"
 
+#include "Config.h"
+
 #include "GlobalStorage.h"
 #include "JobQueue.h"
-
 #include "geoip/Handler.h"
 #include "network/Manager.h"
 #include "utils/CalamaresUtilsGui.h"
 #include "utils/Logger.h"
 #include "utils/Variant.h"
 #include "utils/Yaml.h"
-
 #include "Branding.h"
 #include "modulesystem/ModuleManager.h"
+
 #include <QQmlEngine>
 #include <QFutureWatcher>
 #include <QPixmap>
@@ -40,7 +41,7 @@ CALAMARES_PLUGIN_FACTORY_DEFINITION( LocaleQmlViewStepFactory, registerPlugin< L
 
 LocaleQmlViewStep::LocaleQmlViewStep( QObject* parent )
 : Calamares::QmlViewStep( parent )
-, m_config( new Config( this ) )
+, m_config( std::make_unique< Config >( this ) )
 , m_nextEnabled( false )
 , m_geoip( nullptr )
 {
@@ -50,7 +51,7 @@ LocaleQmlViewStep::LocaleQmlViewStep( QObject* parent )
 QObject*
 LocaleQmlViewStep::getConfig()
 {
-    return m_config;
+    return m_config.get();
 }
 
 void

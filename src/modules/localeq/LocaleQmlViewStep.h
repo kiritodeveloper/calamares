@@ -19,17 +19,18 @@
 #ifndef LOCALE_QMLVIEWSTEP_H
 #define LOCALE_QMLVIEWSTEP_H
 
-#include "Config.h"
+#include "DllMacro.h"
 #include "geoip/Handler.h"
 #include "geoip/Interface.h"
 #include "utils/PluginFactory.h"
 #include "viewpages/QmlViewStep.h"
-#include <DllMacro.h>
 
 #include <QFutureWatcher>
 #include <QObject>
 
 #include <memory>
+
+class Config;
 
 class PLUGINDLLEXPORT LocaleQmlViewStep : public Calamares::QmlViewStep
 {
@@ -56,9 +57,6 @@ public:
     virtual Calamares::RequirementsList checkRequirements() override;
 
 private:
-    // TODO: a generic QML viewstep should return a config object from a method
-    Config *m_config;
-
     bool m_nextEnabled;
     QString m_prettyStatus;
 
@@ -67,6 +65,7 @@ private:
 
     Calamares::JobList m_jobs;
     std::unique_ptr< CalamaresUtils::GeoIP::Handler > m_geoip;
+    std::unique_ptr< Config > m_config;
 
     void fetchGeoIpTimezone();
 };
