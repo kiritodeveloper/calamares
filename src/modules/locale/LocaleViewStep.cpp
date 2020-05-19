@@ -19,12 +19,12 @@
 
 #include "LocaleViewStep.h"
 
+#include "Config.h"
 #include "LocalePage.h"
 #include "widgets/WaitingWidget.h"
 
 #include "GlobalStorage.h"
 #include "JobQueue.h"
-
 #include "geoip/Handler.h"
 #include "network/Manager.h"
 #include "utils/CalamaresUtilsGui.h"

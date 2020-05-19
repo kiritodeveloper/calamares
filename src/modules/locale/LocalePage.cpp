@@ -285,7 +285,7 @@ LocalePage::createJobs()
     QList< Calamares::job_ptr > list;
     const CalamaresUtils::Locale::TZZone* location = m_tzWidget->currentLocation();
 
-    Calamares::Job* j = new SetTimezoneJob( location->region(), location->zone() );
+    Calamares::Job* j = new SetTimezoneJob( *location );
     list.append( Calamares::job_ptr( j ) );
 
     return list;

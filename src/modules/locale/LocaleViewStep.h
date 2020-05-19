@@ -32,6 +32,7 @@
 
 #include <memory>
 
+class Config;
 class LocalePage;
 
 class PLUGINDLLEXPORT LocaleViewStep : public Calamares::ViewStep
@@ -79,6 +80,7 @@ private:
 
     Calamares::JobList m_jobs;
     std::unique_ptr< CalamaresUtils::GeoIP::Handler > m_geoip;
+    std::unique_ptr< Config > m_config;
 };
 
 CALAMARES_PLUGIN_FACTORY_DECLARATION( LocaleViewStepFactory )
