@@ -4,6 +4,11 @@
 # or provide alternatives, so instead we have one module that completes
 # a FreeBSD installation based on the GlobalStorage values set by
 # Calamares viewmodules.
+#
+#   SPDX-FileCopyrightText: 2019 Adriaan de Groot <groot@kde.org>
+#   SPDX-License-Identifier: GPL-3.0-or-later
+#   License-Filename: LICENSE
+#
 
 calamares_add_plugin( os-freebsd
     TYPE job

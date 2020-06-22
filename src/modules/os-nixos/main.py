@@ -3,8 +3,6 @@
 #
 # === This file is part of Calamares - <https://github.com/calamares> ===
 #
-#   Copyright 2019, Adriaan de Groot <groot@kde.org>
-#
 #   Calamares is free software: you can redistribute it and/or modify
 #   it under the terms of the GNU General Public License as published by
 #   the Free Software Foundation, either version 3 of the License, or
@@ -17,6 +15,11 @@
 #
 #   You should have received a copy of the GNU General Public License
 #   along with Calamares. If not, see <http://www.gnu.org/licenses/>.
+#
+#   SPDX-FileCopyrightText: 2019 Adriaan de Groot <groot@kde.org>
+#   SPDX-License-Identifier: GPL-3.0-or-later
+#   License-Filename: LICENSE
+#
 
 """
 === NixOS Configuration
@@ -52,7 +55,7 @@ def run():
     libcalamares.utils.debug("Languages=" +
                              str(libcalamares.utils.gettext_languages()))
 
-    # TODO: probably want to use the job configuration 
+    # TODO: probably want to use the job configuration
     #       with a key "stage" to distinguish generate-config
     #       from execute-config; maybe it wants an "all" as well
     #       to do both.
