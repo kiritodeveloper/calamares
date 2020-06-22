@@ -1,7 +1,7 @@
 /* === This file is part of Calamares - <https://github.com/calamares> ===
- *
- *   Copyright 2014-2015, Teo Mrnjavac <teo@kde.org>
- *   Copyright 2017-2019, Adriaan de Groot <groot@kde.org>
+ * 
+ *   SPDX-FileCopyrightText: 2014-2015 Teo Mrnjavac <teo@kde.org>
+ *   SPDX-FileCopyrightText: 2017-2019 Adriaan de Groot <groot@kde.org>
  *
  *   Calamares is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -15,6 +15,10 @@
  *
  *   You should have received a copy of the GNU General Public License
  *   along with Calamares. If not, see <http://www.gnu.org/licenses/>.
+ *
+ *   SPDX-License-Identifier: GPL-3.0-or-later
+ *   License-Filename: LICENSE
+ *
  */
 
 #include "Label.h"
@@ -24,25 +28,16 @@ namespace CalamaresUtils
 namespace Locale
 {
 
-Label::Label()
-    : m_locale( QLocale() )
+Label::Label( QObject* parent )
+    : Label( QString(), LabelFormat::IfNeededWithCountry, parent )
 {
-    m_localeId = m_locale.name();
-
-    setLabels( QString(), LabelFormat::IfNeededWithCountry );
 }
 
-Label::Label( const QString& locale, LabelFormat format )
-    : m_locale( Label::getLocale( locale ) )
-    , m_localeId( locale )
+Label::Label( const QString& locale, LabelFormat format, QObject* parent )
+    : QObject( parent )
+    , m_locale( Label::getLocale( locale ) )
+    , m_localeId( locale.isEmpty() ? m_locale.name() : locale )
 {
-    setLabels( locale, format );
-}
-
-void
-Label::setLabels( const QString& locale, LabelFormat format )
-{
-    //: language[name] (country[name])
     QString longFormat = QObject::tr( "%1 (%2)" );
 
     QString languageName = m_locale.nativeLanguageName();
@@ -69,6 +64,10 @@ Label::setLabels( const QString& locale, LabelFormat format )
 QLocale
 Label::getLocale( const QString& localeName )
 {
+    if ( localeName.isEmpty() )
+    {
+        return QLocale();
+    }
     if ( localeName.contains( "@latin" ) )
     {
         QLocale loc( localeName );  // Ignores @latin

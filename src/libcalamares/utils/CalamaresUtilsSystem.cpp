@@ -1,7 +1,7 @@
 /* === This file is part of Calamares - <https://github.com/calamares> ===
- *
- *   Copyright 2014, Teo Mrnjavac <teo@kde.org>
- *   Copyright 2017-2018, Adriaan de Groot <groot@kde.org>
+ * 
+ *   SPDX-FileCopyrightText: 2014 Teo Mrnjavac <teo@kde.org>
+ *   SPDX-FileCopyrightText: 2017-2020 Adriaan de Groot <groot@kde.org>
  *
  *   Calamares is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -15,6 +15,10 @@
  *
  *   You should have received a copy of the GNU General Public License
  *   along with Calamares. If not, see <http://www.gnu.org/licenses/>.
+ *
+ *   SPDX-License-Identifier: GPL-3.0-or-later
+ *   License-Filename: LICENSE
+ *
  */
 
 #include "CalamaresUtilsSystem.h"
@@ -117,53 +121,6 @@ System::instance()
 }
 
 
-int
-System::mount( const QString& devicePath,
-               const QString& mountPoint,
-               const QString& filesystemName,
-               const QString& options )
-{
-    if ( devicePath.isEmpty() || mountPoint.isEmpty() )
-    {
-        if ( devicePath.isEmpty() )
-        {
-            cWarning() << "Can't mount an empty device.";
-        }
-        if ( mountPoint.isEmpty() )
-        {
-            cWarning() << "Can't mount on an empty mountpoint.";
-        }
-
-        return static_cast< int >( ProcessResult::Code::NoWorkingDirectory );
-    }
-
-    QDir mountPointDir( mountPoint );
-    if ( !mountPointDir.exists() )
-    {
-        bool ok = mountPointDir.mkpath( mountPoint );
-        if ( !ok )
-        {
-            cWarning() << "Could not create mountpoint" << mountPoint;
-            return static_cast< int >( ProcessResult::Code::NoWorkingDirectory );
-        }
-    }
-
-    QString program( "mount" );
-    QStringList args = { devicePath, mountPoint };
-
-    if ( !filesystemName.isEmpty() )
-    {
-        args << "-t" << filesystemName;
-    }
-
-    if ( !options.isEmpty() )
-    {
-        args << "-o" << options;
-    }
-
-    return QProcess::execute( program, args );
-}
-
 ProcessResult
 System::runCommand( System::RunLocation location,
                     const QStringList& args,
@@ -171,7 +128,11 @@ System::runCommand( System::RunLocation location,
                     const QString& stdInput,
                     std::chrono::seconds timeoutSec )
 {
-    QString output;
+    if ( args.isEmpty() )
+    {
+        cWarning() << "Cannot run an empty program list";
+        return ProcessResult::Code::FailedToStart;
+    }
 
     Calamares::GlobalStorage* gs
         = Calamares::JobQueue::instance() ? Calamares::JobQueue::instance()->globalStorage() : nullptr;
@@ -182,9 +143,8 @@ System::runCommand( System::RunLocation location,
         return ProcessResult::Code::NoWorkingDirectory;
     }
 
-    QProcess process;
     QString program;
-    QStringList arguments;
+    QStringList arguments( args );
 
     if ( location == System::RunLocation::RunInTarget )
     {
@@ -196,15 +156,14 @@ System::runCommand( System::RunLocation location,
         }
 
         program = "chroot";
-        arguments = QStringList( { destDir } );
-        arguments << args;
+        arguments.prepend( destDir );
     }
     else
     {
         program = "env";
-        arguments << args;
     }
 
+    QProcess process;
     process.setProgram( program );
     process.setArguments( arguments );
     process.setProcessChannelMode( QProcess::MergedChannels );
@@ -226,7 +185,7 @@ System::runCommand( System::RunLocation location,
     process.start();
     if ( !process.waitForStarted() )
     {
-        cWarning() << "Process failed to start" << process.error();
+        cWarning() << "Process" << args.first() << "failed to start" << process.error();
         return ProcessResult::Code::FailedToStart;
     }
 
@@ -236,18 +195,19 @@ System::runCommand( System::RunLocation location,
     }
     process.closeWriteChannel();
 
-    if ( !process.waitForFinished(
-             timeoutSec > std::chrono::seconds::zero() ? ( std::chrono::milliseconds( timeoutSec ).count() ) : -1 ) )
+    if ( !process.waitForFinished( timeoutSec > std::chrono::seconds::zero()
+                                       ? ( static_cast< int >( std::chrono::milliseconds( timeoutSec ).count() ) )
+                                       : -1 ) )
     {
-        cWarning().noquote().nospace() << "Timed out. Output so far:\n" << process.readAllStandardOutput();
+        cWarning() << "Process" << args.first() << "timed out after" << timeoutSec.count() << "s. Output so far:\n" << Logger::NoQuote{} << process.readAllStandardOutput();
         return ProcessResult::Code::TimedOut;
     }
 
-    output.append( QString::fromLocal8Bit( process.readAllStandardOutput() ).trimmed() );
+    QString output = QString::fromLocal8Bit( process.readAllStandardOutput() ).trimmed();
 
     if ( process.exitStatus() == QProcess::CrashExit )
     {
-        cWarning().noquote().nospace() << "Process crashed. Output so far:\n" << output;
+        cWarning() << "Process" << args.first() << "crashed. Output so far:\n" << Logger::NoQuote{} << output;
         return ProcessResult::Code::Crashed;
     }
 
@@ -256,17 +216,21 @@ System::runCommand( System::RunLocation location,
     bool showDebug = ( !Calamares::Settings::instance() ) || ( Calamares::Settings::instance()->debugMode() );
     if ( ( r != 0 ) || showDebug )
     {
-        cDebug() << "Target cmd:" << RedactedList( args );
-        cDebug().noquote().nospace() << "Target output:\n" << output;
+        cDebug() << "Target cmd:" << RedactedList( args ) << "output:\n" << Logger::NoQuote{} << output;
     }
     return ProcessResult( r, output );
+}
+
+/// @brief Cheap check if a path is absolute.
+static inline bool
+isAbsolutePath( const QString& path )
+{
+    return path.startsWith( '/' );
 }
 
 QString
 System::targetPath( const QString& path ) const
 {
-    QString completePath;
-
     if ( doChroot() )
     {
         Calamares::GlobalStorage* gs
@@ -274,56 +238,108 @@ System::targetPath( const QString& path ) const
 
         if ( !gs || !gs->contains( "rootMountPoint" ) )
         {
-            cWarning() << "No rootMountPoint in global storage, cannot create target file" << path;
+            cWarning() << "No rootMountPoint in global storage, cannot name target file" << path;
             return QString();
         }
 
-        completePath = gs->value( "rootMountPoint" ).toString() + '/' + path;
+        QString root = gs->value( "rootMountPoint" ).toString();
+        return isAbsolutePath( path ) ? ( root + path ) : ( root + '/' + path );
     }
     else
     {
-        completePath = QStringLiteral( "/" ) + path;
+        return isAbsolutePath( path ) ? path : ( QStringLiteral( "/" ) + path );
     }
-
-    return completePath;
 }
 
-QString
-System::createTargetFile( const QString& path, const QByteArray& contents ) const
+CreationResult
+System::createTargetFile( const QString& path, const QByteArray& contents, WriteMode mode ) const
 {
     QString completePath = targetPath( path );
     if ( completePath.isEmpty() )
     {
-        return QString();
+        return CreationResult( CreationResult::Code::Invalid );
     }
 
     QFile f( completePath );
-    if ( f.exists() )
+    if ( ( mode == WriteMode::KeepExisting ) && f.exists() )
     {
-        return QString();
+        return CreationResult( CreationResult::Code::AlreadyExists );
     }
 
     QIODevice::OpenMode m =
 #if QT_VERSION >= QT_VERSION_CHECK( 5, 11, 0 )
         // New flag from Qt 5.11, implies WriteOnly
-        QIODevice::NewOnly |
+        ( mode == WriteMode::KeepExisting ? QIODevice::NewOnly : QIODevice::WriteOnly ) |
 #endif
         QIODevice::WriteOnly | QIODevice::Truncate;
 
     if ( !f.open( m ) )
     {
-        return QString();
+        return CreationResult( CreationResult::Code::Failed );
     }
 
     if ( f.write( contents ) != contents.size() )
     {
         f.close();
         f.remove();
-        return QString();
+        return CreationResult( CreationResult::Code::Failed );
     }
 
     f.close();
-    return QFileInfo( f ).canonicalFilePath();
+    return CreationResult( QFileInfo( f ).canonicalFilePath() );
+}
+
+void
+System::removeTargetFile( const QString& path ) const
+{
+    if ( !isAbsolutePath( path ) )
+    {
+        cWarning() << "Will not remove non-absolute path" << path;
+        return;
+    }
+    QString target = targetPath( path );
+    if ( !target.isEmpty() )
+    {
+        QFile::remove( target );
+    }
+    // If it was empty, a warning was already printed
+}
+
+bool
+System::createTargetDirs( const QString& path ) const
+{
+    if ( !isAbsolutePath( path ) )
+    {
+        cWarning() << "Will not create basedirs for non-absolute path" << path;
+        return false;
+    }
+
+    QString target = targetPath( path );
+    if ( target.isEmpty() )
+    {
+        // If it was empty, a warning was already printed
+        return false;
+    }
+
+    QString root = Calamares::JobQueue::instance()->globalStorage()->value( "rootMountPoint" ).toString();
+    if ( root.isEmpty() )
+    {
+        return false;
+    }
+
+    QDir d( root );
+    if ( !d.exists() )
+    {
+        cWarning() << "Root mountpoint" << root << "does not exist.";
+        return false;
+    }
+    return d.mkpath( target );  // This re-does everything starting from the **host** /
+}
+
+bool
+System::createTargetParentDirs( const QString& filePath ) const
+{
+    return createTargetDirs( QFileInfo( filePath ).dir().path() );
 }
 
 

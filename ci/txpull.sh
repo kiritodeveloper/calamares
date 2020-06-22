@@ -1,4 +1,18 @@
 #!/bin/sh
+
+### LICENSE
+# === This file is part of Calamares - <https://github.com/calamares> ===
+#
+#   SPDX-License-Identifier: BSD-2-Clause
+#   SPDX-FileCopyrightText: 2017-2020 Adriaan de Groot <groot@kde.org>
+#   SPDX-FileCopyrightText: 2015-2016 Teo Mrnjavac <teo@kde.org>
+#
+#   This file is Free Software: you can redistribute it and/or modify
+#   it under the terms of the 2-clause BSD License.
+#
+### END LICENSE
+
+### USAGE
 #
 # Fetch the Transifex translations for Calamares and incorporate them
 # into the source tree, adding commits of the different files.
@@ -6,24 +20,34 @@
 # Run this (occasionally) at the top-level directory to get
 # new translations. See also CMakeLists.txt and ci/txstats.py
 # for update instructions.
+#
+### END USAGE
 
-### INITIAL SETUP
+### SANITY CHECKING
 #
-# This stuff needs to be done once; in a real CI environment where it
-# runs regularly in a container, the setup needs to be done when
-# creating the container.
+# The script needs a .tx/config to talk to the Transifex server;
+# it also checks that it is run from the top-level of a Calamares
+# checkout. In order to use the system overall, you'll also need:
+#  - ~/.gitconfig (For the git commits this does)
+#  - ~/.transifexrc (Password token for Transifex)
+#  - ~/.ssh (For git commits)
 #
-#
-# cp ~/jenkins-master/.transifexrc ~  # Transifex user settings
-# cp ~/jenkins-master/.gitconfig ~    # Git config, user settings
-# cp -R ~/jenkins-master/.ssh ~       # SSH, presumably for github
-#
-# cd "$WORKSPACE"
-# git config --global http.sslVerify false
-
 test -f "CMakeLists.txt" || { echo "! Not at Calamares top-level" ; exit 1 ; }
 test -f ".tx/config" || { echo "! Not at Calamares top-level" ; exit 1 ; }
 test -f "calamares.desktop" || { echo "! Not at Calamares top-level" ; exit 1 ; }
+
+
+### FIND EXECUTABLES
+#
+#
+XMLLINT=""
+for _xmllint in xmllint
+do
+	$_xmllint --version > /dev/null 2>&1 && XMLLINT=$_xmllint
+	test -n "$XMLLINT" && break
+done
+# XMLLINT is optional
+
 
 ### FETCH TRANSLATIONS
 #
@@ -33,15 +57,16 @@ test -f "calamares.desktop" || { echo "! Not at Calamares top-level" ; exit 1 ; 
 export QT_SELECT=5
 tx pull --force --source --all
 
+
 ### CLEANUP TRANSLATIONS
 #
 # Some languages have been deprecated. They may still exist in Transifex,
 # so clean them up after pulling.
 #
 drop_language() {
-  rm -rf lang/python/"$1" src/modules/dummypythonqt/lang/"$1" lang/calamares_"$1".ts
-  grep -v "\\[$1]" calamares.desktop > calamares.desktop.new
-  mv calamares.desktop.new calamares.desktop
+	rm -rf lang/python/"$1" src/modules/dummypythonqt/lang/"$1" lang/calamares_"$1".ts
+	grep -v "\\[$1]" calamares.desktop > calamares.desktop.new
+	mv calamares.desktop.new calamares.desktop
 }
 
 drop_language es_ES
@@ -51,6 +76,15 @@ drop_language pl_PL
 #
 { cat calamares.desktop.in ; grep "\\[[a-zA-Z_@]*]=" calamares.desktop ; } > calamares.desktop.new
 mv calamares.desktop.new calamares.desktop
+
+# And fixup the XML files like in txpush.sh
+if test -n "$XMLLINT" ; then
+	for TS_FILE in lang/calamares_*.ts
+	do
+		$XMLLINT --c14n11 "$TS_FILE" | { echo "<!DOCTYPE TS>" ; cat - ; } | $XMLLINT --format --encode utf-8 -o "$TS_FILE".new - && mv "$TS_FILE".new "$TS_FILE"
+	done
+fi
+
 
 ### COMMIT TRANSLATIONS
 #
@@ -85,26 +119,24 @@ git diff --numstat src/modules | awk '($1==1 && $2==1){print $3}' | xargs git ch
 # Go through the Python modules; those with a lang/ subdir have their
 # own complete gettext-based setup.
 for MODULE_DIR in $(find src/modules -maxdepth 1 -mindepth 1 -type d) ; do
-  FILES=$(find "$MODULE_DIR" -name "*.py" -a -type f)
-  if test -n "$FILES" ; then
-    MODULE_NAME=$(basename ${MODULE_DIR})
-    if [ -d ${MODULE_DIR}/lang ]; then
-      # Convert PO files to MO files
-      for POFILE in $(find ${MODULE_DIR} -name "*.po") ; do
-        sed -i'' '/^"Content-Type/s/CHARSET/UTF-8/' $POFILE
-        msgfmt -o ${POFILE%.po}.mo $POFILE
-      done
-      git add --verbose ${MODULE_DIR}/lang/*
-      git commit "$AUTHOR" --message="i18n: [${MODULE_NAME}] $BOILERPLATE" | true
-    fi
-  fi
+	FILES=$(find "$MODULE_DIR" -name "*.py" -a -type f)
+	if test -n "$FILES" ; then
+		MODULE_NAME=$(basename ${MODULE_DIR})
+		if [ -d ${MODULE_DIR}/lang ]; then
+			# Convert PO files to MO files
+			for POFILE in $(find ${MODULE_DIR} -name "*.po") ; do
+				sed -i'' '/^"Content-Type/s/CHARSET/UTF-8/' $POFILE
+				msgfmt -o ${POFILE%.po}.mo $POFILE
+			done
+			git add --verbose ${MODULE_DIR}/lang/*
+			git commit "$AUTHOR" --message="i18n: [${MODULE_NAME}] $BOILERPLATE" | true
+		fi
+	fi
 done
 
 for POFILE in $(find lang -name "python.po") ; do
-  sed -i'' '/^"Content-Type/s/CHARSET/UTF-8/' $POFILE
-  msgfmt -o ${POFILE%.po}.mo $POFILE
+	sed -i'' '/^"Content-Type/s/CHARSET/UTF-8/' $POFILE
+	msgfmt -o ${POFILE%.po}.mo $POFILE
 done
 git add --verbose lang/python*
 git commit "$AUTHOR" --message="i18n: [python] $BOILERPLATE" | true
-
-# git push --set-upstream origin master

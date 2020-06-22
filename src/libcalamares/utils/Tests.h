@@ -1,6 +1,7 @@
 /* === This file is part of Calamares - <https://github.com/calamares> ===
+ * 
+ *   SPDX-FileCopyrightText: 2018 Adriaan de Groot <groot@kde.org>
  *
- *   Copyright 2018, Adriaan de Groot <groot@kde.org>
  *
  *   Calamares is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -14,6 +15,10 @@
  *
  *   You should have received a copy of the GNU General Public License
  *   along with Calamares. If not, see <http://www.gnu.org/licenses/>.
+ *
+ *   SPDX-License-Identifier: GPL-3.0-or-later
+ *   License-Filename: LICENSE
+ *
  */
 
 #ifndef TESTS_H
@@ -39,6 +44,14 @@ private Q_SLOTS:
 
     /** @brief Test that all the UMask objects work correctly. */
     void testUmask();
+
+    /** @brief Tests the entropy functions. */
+    void testEntropy();
+    void testPrintableEntropy();
+    void testOddSizedPrintable();
+
+private:
+    void recursiveCompareMap( const QVariantMap& a, const QVariantMap& b, int depth );
 };
 
 #endif

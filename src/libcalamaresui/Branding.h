@@ -3,6 +3,7 @@
  *   Copyright 2014-2015, Teo Mrnjavac <teo@kde.org>
  *   Copyright 2017-2018, Adriaan de Groot <groot@kde.org>
  *   Copyright 2018, Raul Rodrigo Segura (raurodse)
+ *   Copyright 2019, Camilo Higuita <milo.h@aol.com>
  *
  *   Calamares is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -21,17 +22,19 @@
 #ifndef BRANDING_H
 #define BRANDING_H
 
-#include "UiDllMacro.h"
-
+#include "CalamaresConfig.h"
+#include "DllMacro.h"
 #include "utils/NamedSuffix.h"
 
-#include <QObject>
-#include <QStringList>
 #include <QMap>
+#include <QObject>
+#include <QPixmap>
+#include <QSize>
+#include <QStringList>
 
 namespace YAML
 {
-    class Node;
+class Node;
 }
 
 namespace Calamares
@@ -48,7 +51,7 @@ public:
      * e.g. *Branding::ProductName to get the string value for
      * the product name.
      */
-    enum StringEntry : short
+    enum StringEntry
     {
         ProductName,
         Version,
@@ -60,15 +63,20 @@ public:
         ProductUrl,
         SupportUrl,
         KnownIssuesUrl,
-        ReleaseNotesUrl
+        ReleaseNotesUrl,
+        DonateUrl
     };
+    Q_ENUM( StringEntry )
 
     enum ImageEntry : short
     {
-        ProductLogo,
+        ProductBanner,
         ProductIcon,
+        ProductLogo,
+        ProductWallpaper,
         ProductWelcome
     };
+    Q_ENUM( ImageEntry )
 
     enum StyleEntry : short
     {
@@ -77,29 +85,73 @@ public:
         SidebarTextSelect,
         SidebarTextHighlight
     };
+    Q_ENUM( StyleEntry )
 
     /** @brief Setting for how much the main window may expand. */
-    enum class WindowExpansion { Normal, Fullscreen, Fixed } ;
+    enum class WindowExpansion
+    {
+        Normal,
+        Fullscreen,
+        Fixed
+    };
+    Q_ENUM( WindowExpansion )
     /** @brief Setting for the main window size.
      *
      * The units are pixels (Pixies) or something-based-on-fontsize (Fonties), which
      * we suffix as "em", e.g. "600px" or "32em".
      */
-    enum class WindowDimensionUnit { None, Pixies, Fonties };
-    class WindowDimension : public NamedSuffix<WindowDimensionUnit, WindowDimensionUnit::None>
+    enum class WindowDimensionUnit
+    {
+        None,
+        Pixies,
+        Fonties
+    };
+    Q_ENUM( WindowDimensionUnit )
+    class WindowDimension : public NamedSuffix< WindowDimensionUnit, WindowDimensionUnit::None >
     {
     public:
-        static  const NamedEnumTable< WindowDimensionUnit >& suffixes();
+        static const NamedEnumTable< WindowDimensionUnit >& suffixes();
         bool isValid() const;
 
         using NamedSuffix::NamedSuffix;
-        WindowDimension( const QString& s ) : NamedSuffix( suffixes(), s ) {}
-    } ;
+        WindowDimension( const QString& s )
+            : NamedSuffix( suffixes(), s )
+        {
+        }
+    };
+    /** @brief Placement of main window.
+     */
+    enum class WindowPlacement
+    {
+        Center,
+        Free
+    };
+    Q_ENUM( WindowPlacement )
+    ///@brief What kind of panel (sidebar, navigation) to use in the main window
+    enum class PanelFlavor
+    {
+        None,
+        Widget
+#ifdef WITH_QML
+        ,
+        Qml
+#endif
+    };
+    Q_ENUM( PanelFlavor )
+    ///@brief Where to place a panel (sidebar, navigation)
+    enum class PanelSide
+    {
+        None,
+        Left,
+        Right,
+        Top,
+        Bottom
+    };
+    Q_ENUM( PanelSide )
 
     static Branding* instance();
 
-    explicit Branding( const QString& brandingFilePath,
-                       QObject* parent = nullptr );
+    explicit Branding( const QString& brandingFilePath, QObject* parent = nullptr );
 
     /** @brief Complete path of the branding descriptor file. */
     QString descriptorPath() const { return m_descriptorPath; }
@@ -116,13 +168,18 @@ public:
      */
     QString translationsDirectory() const { return m_translationsPathPrefix; }
 
-    /** @brief Path to the slideshow QML file, if any. */
+    /** @brief Path to the slideshow QML file, if any. (API == 1 or 2)*/
     QString slideshowPath() const { return m_slideshowPath; }
+    /// @brief List of pathnames of slideshow images, if any. (API == -1)
+    QStringList slideshowImages() const { return m_slideshowFilenames; }
+    /** @brief Which slideshow API to use for the slideshow?
+     *
+     *  -  2    For QML-based slideshows loaded asynchronously (current)
+     *  -  1    For QML-based slideshows, loaded when shown (legacy)
+     *  - -1    For oldschool image-slideshows.
+     */
     int slideshowAPI() const { return m_slideshowAPI; }
 
-    QString string( Branding::StringEntry stringEntry ) const;
-    QString styleString( Branding::StyleEntry styleEntry ) const;
-    QString imagePath( Branding::ImageEntry imageEntry ) const;
     QPixmap image( Branding::ImageEntry imageEntry, const QSize& size ) const;
 
     /** @brief Look up an image in the branding directory or as an icon
@@ -150,6 +207,12 @@ public:
     {
         return QPair< WindowDimension, WindowDimension >( m_windowWidth, m_windowHeight );
     }
+    bool windowPlacementCentered() const { return m_windowPlacement == WindowPlacement::Center; }
+
+    ///@brief Which sidebar flavor is configured
+    PanelFlavor sidebarFlavor() const { return m_sidebarFlavor; }
+    ///@brief Which navigation flavor is configured
+    PanelFlavor navigationFlavor() const { return m_navigationFlavor; }
 
     /**
      * Creates a map called "branding" in the global storage, and inserts an
@@ -158,6 +221,19 @@ public:
      */
     void setGlobals( GlobalStorage* globalStorage ) const;
 
+public slots:
+    QString string( StringEntry stringEntry ) const;
+    QString versionedName() const { return string( VersionedName ); }
+    QString productName() const { return string( ProductName ); }
+    QString shortProductName() const { return string( ShortProductName ); }
+    QString shortVersionedName() const { return string( ShortVersionedName ); }
+
+    QString styleString( StyleEntry styleEntry ) const;
+    QString imagePath( ImageEntry imageEntry ) const;
+
+    PanelSide sidebarSide() const { return m_sidebarSide; }
+    PanelSide navigationSide() const { return m_navigationSide; }
+
 private:
     static Branding* s_instance;
 
@@ -165,30 +241,43 @@ private:
     static const QStringList s_imageEntryStrings;
     static const QStringList s_styleEntryStrings;
 
-    [[noreturn]] void bail( const QString& message );
-
     QString m_descriptorPath;  // Path to descriptor (e.g. "/etc/calamares/default/branding.desc")
     QString m_componentName;  // Matches last part of full path to containing directory
     QMap< QString, QString > m_strings;
     QMap< QString, QString > m_images;
     QMap< QString, QString > m_style;
+
+    /* The slideshow can be done in one of two ways:
+     *  - as a sequence of images
+     *  - as a QML file
+     * The slideshow: setting selects which one is used. If it is
+     * a list (of filenames) then it is a sequence of images, and otherwise
+     * it is a QML file which is run. (For QML, the slideshow API is
+     * important).
+     */
+    QStringList m_slideshowFilenames;
     QString m_slideshowPath;
     int m_slideshowAPI;
     QString m_translationsPathPrefix;
 
     /** @brief Initialize the simple settings below */
     void initSimpleSettings( const YAML::Node& doc );
+    ///@brief Initialize the slideshow settings, above
+    void initSlideshowSettings( const YAML::Node& doc );
 
     bool m_welcomeStyleCalamares;
     bool m_welcomeExpandingLogo;
+
     WindowExpansion m_windowExpansion;
-
     WindowDimension m_windowHeight, m_windowWidth;
+    WindowPlacement m_windowPlacement;
 
+    PanelFlavor m_sidebarFlavor = PanelFlavor::Widget;
+    PanelFlavor m_navigationFlavor = PanelFlavor::Widget;
+    PanelSide m_sidebarSide = PanelSide::Left;
+    PanelSide m_navigationSide = PanelSide::Bottom;
 };
 
-template<typename U> inline QString operator*(U e) { return Branding::instance()->string( e ); }
+}  // namespace Calamares
 
-}
-
-#endif // BRANDING_H
+#endif  // BRANDING_H

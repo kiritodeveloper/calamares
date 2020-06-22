@@ -24,11 +24,11 @@ namespace Calamares
 
 ViewStep::ViewStep( QObject* parent )
     : QObject( parent )
-{}
+{
+}
 
 
-ViewStep::~ViewStep()
-{}
+ViewStep::~ViewStep() { }
 
 
 QString
@@ -45,24 +45,28 @@ ViewStep::createSummaryWidget() const
 
 void
 ViewStep::onActivate()
-{}
+{
+}
 
 
 void
 ViewStep::onLeave()
-{}
+{
+}
 
 void
 ViewStep::next()
-{}
+{
+}
 
 void
 ViewStep::back()
-{}
+{
+}
 
 
 void
-ViewStep::setModuleInstanceKey( const QString& instanceKey )
+ViewStep::setModuleInstanceKey( const Calamares::ModuleSystem::InstanceKey& instanceKey )
 {
     m_instanceKey = instanceKey;
 }
@@ -75,9 +79,10 @@ ViewStep::setConfigurationMap( const QVariantMap& configurationMap )
 }
 
 
-RequirementsList ViewStep::checkRequirements()
+RequirementsList
+ViewStep::checkRequirements()
 {
     return RequirementsList();
 }
 
-}
+}  // namespace Calamares

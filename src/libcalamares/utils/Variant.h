@@ -1,7 +1,8 @@
 /* === This file is part of Calamares - <https://github.com/calamares> ===
  *
- *   Copyright 2013-2016, Teo Mrnjavac <teo@kde.org>
- *   Copyright 2018, Adriaan de Groot <groot@kde.org>
+ *   SPDX-FileCopyrightText: 2013-2016 Teo Mrnjavac <teo@kde.org>
+ *   SPDX-FileCopyrightText: 2018 Adriaan de Groot <groot@kde.org>
+ *
  *
  *   Calamares is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -15,6 +16,10 @@
  *
  *   You should have received a copy of the GNU General Public License
  *   along with Calamares. If not, see <http://www.gnu.org/licenses/>.
+ *
+ *   SPDX-License-Identifier: GPL-3.0-or-later
+ *   License-Filename: LICENSE
+ *
  */
 
 #ifndef UTILS_VARIANT_H
@@ -39,9 +44,19 @@ DLLEXPORT bool getBool( const QVariantMap& map, const QString& key, bool d );
 DLLEXPORT QString getString( const QVariantMap& map, const QString& key );
 
 /**
+ * Get a string list from a mapping; returns empty list if no value.
+ */
+DLLEXPORT QStringList getStringList( const QVariantMap& map, const QString& key );
+
+/**
  * Get an integer value from a mapping; returns @p d if no value.
  */
-DLLEXPORT int getInteger( const QVariantMap& map, const QString& key, int d );
+DLLEXPORT qint64 getInteger( const QVariantMap& map, const QString& key, qint64 d );
+
+/**
+ * Get an unsigned integer value from a mapping; returns @p u if no value.
+ */
+DLLEXPORT quint64 getUnsignedInteger( const QVariantMap& map, const QString& key, quint64 u );
 
 /**
  * Get a double value from a mapping (integers are converted); returns @p d if no value.

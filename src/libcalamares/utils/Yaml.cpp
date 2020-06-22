@@ -1,7 +1,8 @@
 /* === This file is part of Calamares - <https://github.com/calamares> ===
+ * 
+ *   SPDX-FileCopyrightText: 2014 Teo Mrnjavac <teo@kde.org>
+ *   SPDX-FileCopyrightText: 2017-2018 Adriaan de Groot <groot@kde.org>
  *
- *   Copyright 2014, Teo Mrnjavac <teo@kde.org>
- *   Copyright 2017-2018, Adriaan de Groot <groot@kde.org>
  *
  *   Calamares is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -15,6 +16,10 @@
  *
  *   You should have received a copy of the GNU General Public License
  *   along with Calamares. If not, see <http://www.gnu.org/licenses/>.
+ *
+ *   SPDX-License-Identifier: GPL-3.0-or-later
+ *   License-Filename: LICENSE
+ *
  */
 #include "Yaml.h"
 
@@ -79,7 +84,7 @@ yamlScalarToVariant( const YAML::Node& scalarNode )
     }
     if ( QRegExp( "[-+]?\\d+" ).exactMatch( scalarString ) )
     {
-        return QVariant( scalarString.toInt() );
+        return QVariant( scalarString.toLongLong() );
     }
     if ( QRegExp( "[-+]?\\d*\\.?\\d+" ).exactMatch( scalarString ) )
     {
@@ -89,7 +94,7 @@ yamlScalarToVariant( const YAML::Node& scalarNode )
 }
 
 
-QVariant
+QVariantList
 yamlSequenceToVariant( const YAML::Node& sequenceNode )
 {
     QVariantList vl;
@@ -101,7 +106,7 @@ yamlSequenceToVariant( const YAML::Node& sequenceNode )
 }
 
 
-QVariant
+QVariantMap
 yamlMapToVariant( const YAML::Node& mapNode )
 {
     QVariantMap vm;
@@ -260,9 +265,19 @@ dumpYamlElement( QFile& f, const QVariant& value, int indent )
     {
         f.write( QString::number( value.toInt() ).toUtf8() );
     }
+    else if ( value.type() == QVariant::Type::LongLong )
+    {
+        f.write( QString::number( value.toLongLong() ).toUtf8() );
+    }
     else if ( value.type() == QVariant::Type::Double )
     {
-        f.write( QString::number( value.toDouble() ).toUtf8() );
+        f.write( QString::number( value.toDouble(), 'f', 2 ).toUtf8() );
+    }
+    else if ( value.canConvert( QVariant::Type::ULongLong ) )
+    {
+        // This one needs to be *after* bool, int, double to avoid this branch
+        // .. grabbing those convertible types un-necessarily.
+        f.write( QString::number( value.toULongLong() ).toUtf8() );
     }
     else if ( value.type() == QVariant::Type::List )
     {

@@ -20,18 +20,21 @@
 
 #include "WelcomePage.h"
 
-#include "ui_WelcomePage.h"
 #include "checker/CheckerContainer.h"
+#include "ui_WelcomePage.h"
 
 #include "Branding.h"
 #include "CalamaresVersion.h"
+#include "Config.h"
 #include "Settings.h"
 #include "ViewManager.h"
 
 #include "locale/LabelModel.h"
 #include "modulesystem/ModuleManager.h"
+#include "modulesystem/RequirementsModel.h"
 #include "utils/CalamaresUtilsGui.h"
 #include "utils/Logger.h"
+#include "utils/NamedEnum.h"
 #include "utils/Retranslator.h"
 
 #include <QApplication>
@@ -42,87 +45,74 @@
 #include <QLabel>
 #include <QMessageBox>
 
-WelcomePage::WelcomePage( QWidget* parent )
+WelcomePage::WelcomePage( Config* conf, QWidget* parent )
     : QWidget( parent )
     , ui( new Ui::WelcomePage )
-    , m_checkingWidget( new CheckerContainer( this ) )
+    , m_checkingWidget( new CheckerContainer( *(conf->requirementsModel()), this ) )
     , m_languages( nullptr )
+    , m_conf( conf )
 {
-    connect( Calamares::ModuleManager::instance(), &Calamares::ModuleManager::requirementsResult, m_checkingWidget, &CheckerContainer::requirementsChecked );
-    connect( Calamares::ModuleManager::instance(), &Calamares::ModuleManager::requirementsComplete, m_checkingWidget, &CheckerContainer::requirementsComplete );
-    connect( Calamares::ModuleManager::instance(), &Calamares::ModuleManager::requirementsProgress, m_checkingWidget, &CheckerContainer::requirementsProgress );
-    ui->setupUi( this );
+    using Branding = Calamares::Branding;
 
-    ui->verticalLayout->insertSpacing( 1, CalamaresUtils::defaultFontHeight() * 2 );
+    const int defaultFontHeight = CalamaresUtils::defaultFontHeight();
+    ui->setupUi( this );
+    ui->aboutButton->setIcon( CalamaresUtils::defaultPixmap(
+        CalamaresUtils::Information, CalamaresUtils::Original, 2 * QSize( defaultFontHeight, defaultFontHeight ) ) );
+
+    // insert system-check widget below welcome text
+    const int welcome_text_idx = ui->verticalLayout->indexOf( ui->mainText );
+    ui->verticalLayout->insertWidget( welcome_text_idx + 1, m_checkingWidget );
+
+    // insert optional logo banner image above welcome text
+    QString bannerPath = Branding::instance()->imagePath( Branding::ProductBanner );
+    if ( !bannerPath.isEmpty() )
+    {
+        // If the name is not empty, the file exists -- Branding checks that at startup
+        QPixmap bannerPixmap = QPixmap( bannerPath );
+        if ( !bannerPixmap.isNull() )
+        {
+            QLabel* bannerLabel = new QLabel;
+            bannerLabel->setPixmap( bannerPixmap );
+            bannerLabel->setMinimumHeight( 64 );
+            bannerLabel->setAlignment( Qt::AlignCenter );
+            ui->aboveTextSpacer->changeSize( 20, defaultFontHeight );  // Shrink it down
+            ui->aboveTextSpacer->invalidate();
+            ui->verticalLayout->insertSpacing( welcome_text_idx, defaultFontHeight );
+            ui->verticalLayout->insertWidget( welcome_text_idx, bannerLabel );
+        }
+    }
+
     initLanguages();
 
-    ui->mainText->setAlignment( Qt::AlignCenter );
-    ui->mainText->setWordWrap( true );
-    ui->mainText->setOpenExternalLinks( true );
+    CALAMARES_RETRANSLATE_SLOT( &WelcomePage::retranslate )
 
-    cDebug() << "Welcome string" << Calamares::Branding::instance()->welcomeStyleCalamares()
-        << *Calamares::Branding::VersionedName;
-
-    CALAMARES_RETRANSLATE(
-        QString message;
-
-        if ( Calamares::Settings::instance()->isSetupMode() )
-            message = Calamares::Branding::instance()->welcomeStyleCalamares()
-                ? tr( "<h1>Welcome to the Calamares setup program for %1.</h1>" )
-                : tr( "<h1>Welcome to %1 setup.</h1>" );
-        else
-            message = Calamares::Branding::instance()->welcomeStyleCalamares()
-                ? tr( "<h1>Welcome to the Calamares installer for %1.</h1>" )
-                : tr( "<h1>Welcome to the %1 installer.</h1>" );
-
-        ui->mainText->setText( message.arg( *Calamares::Branding::VersionedName ) );
-        ui->retranslateUi( this );
-    )
-
-    ui->aboutButton->setIcon( CalamaresUtils::defaultPixmap( CalamaresUtils::Information,
-                                                             CalamaresUtils::Original,
-                                                             2*QSize( CalamaresUtils::defaultFontHeight(),
-                                                                    CalamaresUtils::defaultFontHeight() ) ) );
-    connect( ui->aboutButton, &QPushButton::clicked,
-             this, [ this ]
-    {
-        QString title = Calamares::Settings::instance()->isSetupMode()
-            ? tr( "About %1 setup" )
-            : tr( "About %1 installer" );
-        QMessageBox mb( QMessageBox::Information,
-                        title.arg( CALAMARES_APPLICATION_NAME ),
-                        tr(
-                            "<h1>%1</h1><br/>"
-                            "<strong>%2<br/>"
-                            "for %3</strong><br/><br/>"
-                            "Copyright 2014-2017 Teo Mrnjavac &lt;teo@kde.org&gt;<br/>"
-                            "Copyright 2017-2019 Adriaan de Groot &lt;groot@kde.org&gt;<br/>"
-                            "Thanks to <a href=\"https://calamares.io/team/\">the Calamares team</a> "
-                            "and the <a href=\"https://www.transifex.com/calamares/calamares/\">Calamares "
-                            "translators team</a>.<br/><br/>"
-                            "<a href=\"https://calamares.io/\">Calamares</a> "
-                            "development is sponsored by <br/>"
-                            "<a href=\"http://www.blue-systems.com/\">Blue Systems</a> - "
-                            "Liberating Software."
-                        )
-                        .arg( CALAMARES_APPLICATION_NAME )
-                        .arg( CALAMARES_VERSION )
-                        .arg( *Calamares::Branding::VersionedName ),
-                        QMessageBox::Ok,
-                        this );
-        mb.setIconPixmap( CalamaresUtils::defaultPixmap( CalamaresUtils::Squid,
-                                                         CalamaresUtils::Original,
-                                                         QSize( CalamaresUtils::defaultFontHeight() * 6,
-                                                                CalamaresUtils::defaultFontHeight() * 6 ) ) );
-        QGridLayout* layout = reinterpret_cast<QGridLayout *>( mb.layout() );
-        if ( layout )
-            layout->setColumnMinimumWidth( 2, CalamaresUtils::defaultFontHeight() * 24 );
-        mb.exec();
-    } );
-
-    ui->verticalLayout->insertWidget( 3, m_checkingWidget);
+    connect( ui->aboutButton, &QPushButton::clicked, this, &WelcomePage::showAboutBox );
+    connect( Calamares::ModuleManager::instance(),
+             &Calamares::ModuleManager::requirementsComplete,
+             m_checkingWidget,
+             &CheckerContainer::requirementsComplete );
+    connect( Calamares::ModuleManager::instance()->requirementsModel(),
+             &Calamares::RequirementsModel::progressMessageChanged,
+             m_checkingWidget,
+             &CheckerContainer::requirementsProgress );
 }
 
+void
+WelcomePage::init()
+{
+    //setup the url buttons
+    setupButton( WelcomePage::Button::Support, m_conf->supportUrl() );
+    setupButton( WelcomePage::Button::KnownIssues, m_conf->knownIssuesUrl() );
+    setupButton( WelcomePage::Button::ReleaseNotes, m_conf->releaseNotesUrl() );
+    setupButton( WelcomePage::Button::Donate, m_conf->donateUrl() );
+
+    //language icon
+    auto icon = Calamares::Branding::instance()->image( m_conf->languageIcon(), QSize( 48, 48 ) );
+    if ( !icon.isNull() )
+    {
+        setLanguageIcon( icon );
+    }
+}
 
 void
 WelcomePage::initLanguages()
@@ -131,129 +121,75 @@ WelcomePage::initLanguages()
     ui->languageWidget->clear();
     ui->languageWidget->setInsertPolicy( QComboBox::InsertAtBottom );
 
-    m_languages = CalamaresUtils::Locale::availableTranslations();
-    ui->languageWidget->setModel( m_languages );
+    ui->languageWidget->setModel( m_conf->languagesModel() );
     ui->languageWidget->setItemDelegate( new LocaleTwoColumnDelegate( ui->languageWidget ) );
 
-    // Find the best initial translation
-    QLocale defaultLocale = QLocale( QLocale::system().name() );
-
-    cDebug() << "Matching locale" << defaultLocale;
-    int matchedLocaleIndex = m_languages->find(
-        [&](const QLocale& x){ return x.language() == defaultLocale.language() && x.country() == defaultLocale.country(); } );
-
-    if ( matchedLocaleIndex < 0 )
-    {
-        cDebug() << Logger::SubEntry << "Matching approximate locale" << defaultLocale.language();
-
-        matchedLocaleIndex = m_languages->find(
-            [&](const QLocale& x){ return x.language() == defaultLocale.language(); } );
-    }
-
-    if ( matchedLocaleIndex < 0 )
-    {
-        QLocale en_us( QLocale::English, QLocale::UnitedStates );
-
-        cDebug() << Logger::SubEntry << "Matching English (US)";
-        matchedLocaleIndex = m_languages->find( en_us );
-
-        // Now, if it matched, because we didn't match the system locale, switch to the one found
-        if ( matchedLocaleIndex >= 0 )
-            QLocale::setDefault( m_languages->locale( matchedLocaleIndex ).locale() );
-    }
-
-    if ( matchedLocaleIndex >= 0 )
-    {
-        QString name = m_languages->locale( matchedLocaleIndex ).name();
-        cDebug() << Logger::SubEntry << "Matched with index" << matchedLocaleIndex << name;
-
-        CalamaresUtils::installTranslator( name, Calamares::Branding::instance()->translationsDirectory(), qApp );
-        ui->languageWidget->setCurrentIndex( matchedLocaleIndex );
-    }
-    else
-        cWarning() << "No available translation matched" << defaultLocale;
+    ui->languageWidget->setCurrentIndex( m_conf->localeIndex() );
 
     connect( ui->languageWidget,
              static_cast< void ( QComboBox::* )( int ) >( &QComboBox::currentIndexChanged ),
-             this,
-             [&]( int newIndex )
-             {
-                 const auto& selectedLocale = m_languages->locale( newIndex ).locale();
-                 cDebug() << "Selected locale" << selectedLocale;
-
-                 QLocale::setDefault( selectedLocale );
-                 CalamaresUtils::installTranslator( selectedLocale,
-                                                    Calamares::Branding::instance()->translationsDirectory(),
-                                                    qApp );
-             } );
+             m_conf,
+             &Config::setLocaleIndex );
 }
-
 
 void
-WelcomePage::setUpLinks( bool showSupportUrl,
-                          bool showKnownIssuesUrl,
-                          bool showReleaseNotesUrl )
+WelcomePage::setupButton( Button role, const QString& url )
 {
-    using namespace Calamares;
-    if ( showSupportUrl && !( *Branding::SupportUrl ).isEmpty() )
+    QPushButton* button = nullptr;
+    CalamaresUtils::ImageType icon = CalamaresUtils::Information;
+
+    switch ( role )
     {
-        CALAMARES_RETRANSLATE(
-            ui->supportButton->setText( tr( "%1 support" )
-                                        .arg( *Branding::ShortProductName ) );
-        )
-        ui->supportButton->setIcon( CalamaresUtils::defaultPixmap( CalamaresUtils::Help,
-                                                                   CalamaresUtils::Original,
-                                                                   2*QSize( CalamaresUtils::defaultFontHeight(),
-                                                                          CalamaresUtils::defaultFontHeight() ) ) );
-        connect( ui->supportButton, &QPushButton::clicked, []
-        {
-            QDesktopServices::openUrl( *Branding::SupportUrl );
-        } );
+    case Button::Donate:
+        button = ui->donateButton;
+        icon = CalamaresUtils::Donate;
+        break;
+    case Button::KnownIssues:
+        button = ui->knownIssuesButton;
+        icon = CalamaresUtils::Bugs;
+        break;
+    case Button::ReleaseNotes:
+        button = ui->releaseNotesButton;
+        icon = CalamaresUtils::Release;
+        break;
+    case Button::Support:
+        button = ui->supportButton;
+        icon = CalamaresUtils::Help;
+        break;
     }
-    else
+    if ( !button )
     {
-        ui->supportButton->hide();
+        qWarning() << "Unknown button role" << smash( role );
+        return;
     }
 
-    if ( showKnownIssuesUrl && !( *Branding::KnownIssuesUrl ).isEmpty() )
+    if ( url.isEmpty() )
     {
-        ui->knownIssuesButton->setIcon( CalamaresUtils::defaultPixmap( CalamaresUtils::Bugs,
-                                                                       CalamaresUtils::Original,
-                                                                       2*QSize( CalamaresUtils::defaultFontHeight(),
-                                                                              CalamaresUtils::defaultFontHeight() ) ) );
-        connect( ui->knownIssuesButton, &QPushButton::clicked, []
-        {
-            QDesktopServices::openUrl( *Branding::KnownIssuesUrl );
-        } );
-    }
-    else
-    {
-        ui->knownIssuesButton->hide();
+        button->hide();
+        return;
     }
 
-    if ( showReleaseNotesUrl && !( *Branding::ReleaseNotesUrl ).isEmpty() )
+    QUrl u( url );
+    if ( u.isValid() )
     {
-        ui->releaseNotesButton->setIcon( CalamaresUtils::defaultPixmap( CalamaresUtils::Release,
-                                                                        CalamaresUtils::Original,
-                                                                        2*QSize( CalamaresUtils::defaultFontHeight(),
-                                                                               CalamaresUtils::defaultFontHeight() ) ) );
-        connect( ui->releaseNotesButton, &QPushButton::clicked, []
-        {
-            QDesktopServices::openUrl( *Branding::ReleaseNotesUrl );
-        } );
+        auto size = 2 * QSize( CalamaresUtils::defaultFontHeight(), CalamaresUtils::defaultFontHeight() );
+        button->setIcon( CalamaresUtils::defaultPixmap( icon, CalamaresUtils::Original, size ) );
+        connect( button, &QPushButton::clicked, [u]() { QDesktopServices::openUrl( u ); } );
     }
     else
     {
-        ui->releaseNotesButton->hide();
+        qWarning() << "Welcome button" << smash( role ) << "URL" << url << "is invalid.";
+        button->hide();
     }
 }
-
 
 void
 WelcomePage::focusInEvent( QFocusEvent* e )
 {
     if ( ui->languageWidget )
+    {
         ui->languageWidget->setFocus();
+    }
     e->accept();
 }
 
@@ -267,7 +203,9 @@ void
 WelcomePage::externallySelectedLanguage( int row )
 {
     if ( ( row >= 0 ) && ( row < ui->languageWidget->count() ) )
+    {
         ui->languageWidget->setCurrentIndex( row );
+    }
 }
 
 void
@@ -276,10 +214,75 @@ WelcomePage::setLanguageIcon( QPixmap i )
     ui->languageIcon->setPixmap( i );
 }
 
+void
+WelcomePage::retranslate()
+{
+    QString message;
+
+    if ( Calamares::Settings::instance()->isSetupMode() )
+    {
+        message = Calamares::Branding::instance()->welcomeStyleCalamares()
+            ? tr( "<h1>Welcome to the Calamares setup program for %1.</h1>" )
+            : tr( "<h1>Welcome to %1 setup.</h1>" );
+    }
+    else
+    {
+        message = Calamares::Branding::instance()->welcomeStyleCalamares()
+            ? tr( "<h1>Welcome to the Calamares installer for %1.</h1>" )
+            : tr( "<h1>Welcome to the %1 installer.</h1>" );
+    }
+
+    ui->mainText->setText( message.arg( Calamares::Branding::instance()->versionedName() ) );
+    ui->retranslateUi( this );
+    ui->supportButton->setText( tr( "%1 support" ).arg( Calamares::Branding::instance()->shortProductName() ) );
+}
 
 void
-LocaleTwoColumnDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const
+WelcomePage::showAboutBox()
+{
+    QString title
+        = Calamares::Settings::instance()->isSetupMode() ? tr( "About %1 setup" ) : tr( "About %1 installer" );
+    QMessageBox mb( QMessageBox::Information,
+                    title.arg( CALAMARES_APPLICATION_NAME ),
+                    tr( "<h1>%1</h1><br/>"
+                        "<strong>%2<br/>"
+                        "for %3</strong><br/><br/>"
+                        "Copyright 2014-2017 Teo Mrnjavac &lt;teo@kde.org&gt;<br/>"
+                        "Copyright 2017-2020 Adriaan de Groot &lt;groot@kde.org&gt;<br/>"
+                        "Thanks to <a href=\"https://calamares.io/team/\">the Calamares team</a> "
+                        "and the <a href=\"https://www.transifex.com/calamares/calamares/\">Calamares "
+                        "translators team</a>.<br/><br/>"
+                        "<a href=\"https://calamares.io/\">Calamares</a> "
+                        "development is sponsored by <br/>"
+                        "<a href=\"http://www.blue-systems.com/\">Blue Systems</a> - "
+                        "Liberating Software." )
+                        .arg( CALAMARES_APPLICATION_NAME )
+                        .arg( CALAMARES_VERSION )
+                        .arg( Calamares::Branding::instance()->versionedName() ),
+                    QMessageBox::Ok,
+                    this );
+    mb.setIconPixmap( CalamaresUtils::defaultPixmap(
+        CalamaresUtils::Squid,
+        CalamaresUtils::Original,
+        QSize( CalamaresUtils::defaultFontHeight() * 6, CalamaresUtils::defaultFontHeight() * 6 ) ) );
+    QGridLayout* layout = reinterpret_cast< QGridLayout* >( mb.layout() );
+    if ( layout )
+    {
+        layout->setColumnMinimumWidth( 2, CalamaresUtils::defaultFontHeight() * 24 );
+    }
+    mb.exec();
+}
+
+
+void
+LocaleTwoColumnDelegate::paint( QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index ) const
 {
     QStyledItemDelegate::paint( painter, option, index );
-    option.widget->style()->drawItemText( painter, option.rect, Qt::AlignRight | Qt::AlignVCenter, option.palette, false, index.data( CalamaresUtils::Locale::LabelModel::EnglishLabelRole ).toString() );
+    option.widget->style()->drawItemText(
+        painter,
+        option.rect,
+        Qt::AlignRight | Qt::AlignVCenter,
+        option.palette,
+        false,
+        index.data( CalamaresUtils::Locale::LabelModel::EnglishLabelRole ).toString() );
 }

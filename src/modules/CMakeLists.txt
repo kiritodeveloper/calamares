@@ -10,12 +10,6 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/src/libcalamaresui
 )
 
-if( BUILD_TESTING )
-    add_executable( test_conf test_conf.cpp )
-    target_link_libraries( test_conf ${YAMLCPP_LIBRARY} Qt5::Core )
-    target_include_directories( test_conf PUBLIC ${YAMLCPP_INCLUDE_DIR} )
-endif()
-
 string( REPLACE " " ";" SKIP_LIST "${SKIP_MODULES}" )
 
 file( GLOB SUBDIRECTORIES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "*" )
@@ -75,3 +69,21 @@ endforeach()
 
 include( CalamaresAddTranslations )
 add_calamares_python_translations( ${CALAMARES_TRANSLATION_LANGUAGES} )
+
+# TODO:3.3: Use FindPython3
+if ( BUILD_TESTING AND BUILD_SCHEMA_TESTING AND PYTHONINTERP_FOUND AND PYTHON_EXECUTABLE )
+    # The tests for each config file are independent of whether the
+    # module is enabled or not: the config file should match its schema
+    # regardless.
+    foreach( SUBDIRECTORY ${SUBDIRECTORIES} )
+        set( _schema_file "${CMAKE_CURRENT_SOURCE_DIR}/${SUBDIRECTORY}/${SUBDIRECTORY}.schema.yaml" )
+        set( _conf_file "${CMAKE_CURRENT_SOURCE_DIR}/${SUBDIRECTORY}/${SUBDIRECTORY}.conf" )
+        if ( EXISTS "${_schema_file}" AND EXISTS "${_conf_file}" )
+            add_test(
+                NAME validate-${SUBDIRECTORY}
+                COMMAND ${PYTHON_EXECUTABLE} "${CMAKE_SOURCE_DIR}/ci/configvalidator.py" "${_schema_file}" "${_conf_file}"
+            )
+        endif()
+    endforeach()
+endif()
+

@@ -20,6 +20,7 @@
 
 #include "ui_page_package.h"
 
+#include "utils/CalamaresUtilsGui.h"
 #include "utils/Logger.h"
 #include "utils/Retranslator.h"
 
@@ -50,6 +51,39 @@ PackageChooserPage::PackageChooserPage( PackageChooserMode mode, QWidget* parent
     case PackageChooserMode::RequiredMultiple:
         ui->products->setSelectionMode( QAbstractItemView::ExtendedSelection );
     }
+
+    ui->products->setMinimumWidth( 10 * CalamaresUtils::defaultFontHeight() );
+}
+
+/** @brief size the given @p pixmap to @p size
+ *
+ * This is "smart" in the sense that it tries to keep the image un-scaled
+ * (if it's just a little too big) and otherwise scales as needed.
+ *
+ * Returns a copy if any modifications are done.
+ */
+static QPixmap
+smartClip( const QPixmap& pixmap, QSize size )
+{
+    auto pixSize = pixmap.size();
+    if ( ( pixSize.width() <= size.width() ) && ( pixSize.height() <= size.height() ) )
+    {
+        return pixmap;
+    }
+
+    // only slightly bigger? Trim the edges
+    constexpr int margin = 16;
+    if ( ( pixSize.width() <= size.width() + margin ) && ( pixSize.height() <= size.height() + margin ) )
+    {
+        int x = pixSize.width() <= size.width() ? 0 : ( pixSize.width() - size.width() / 2 );
+        int new_width = pixSize.width() <= size.width() ? pixSize.width() : size.width();
+        int y = pixSize.height() <= size.height() ? 0 : ( pixSize.height() - size.height() / 2 );
+        int new_height = pixSize.height() <= size.height() ? pixSize.height() : size.height();
+
+        return pixmap.copy( x, y, new_width, new_height );
+    }
+
+    return pixmap.scaled( size, Qt::KeepAspectRatio );
 }
 
 void
@@ -66,8 +100,17 @@ PackageChooserPage::currentChanged( const QModelIndex& index )
         const auto* model = ui->products->model();
 
         ui->productName->setText( model->data( index, PackageListModel::NameRole ).toString() );
-        ui->productScreenshot->setPixmap( model->data( index, PackageListModel::ScreenshotRole ).value< QPixmap >() );
         ui->productDescription->setText( model->data( index, PackageListModel::DescriptionRole ).toString() );
+
+        QPixmap currentScreenshot = model->data( index, PackageListModel::ScreenshotRole ).value< QPixmap >();
+        if ( currentScreenshot.isNull() )
+        {
+            ui->productScreenshot->setPixmap( m_introduction.screenshot );
+        }
+        else
+        {
+            ui->productScreenshot->setPixmap( smartClip( currentScreenshot, ui->productScreenshot->size() ) );
+        }
     }
 }
 
@@ -89,30 +132,21 @@ void
 PackageChooserPage::setModel( QAbstractItemModel* model )
 {
     ui->products->setModel( model );
-
-    // Check if any of the items in the model is the "none" option.
-    // If so, copy its values into the introduction / none item.
-    for ( int r = 0; r < model->rowCount(); ++r )
-    {
-        auto index = model->index( r, 0 );
-        if ( index.isValid() )
-        {
-            QVariant v = model->data( index, PackageListModel::IdRole );
-            if ( v.isValid() && v.toString().isEmpty() )
-            {
-                m_introduction.name = model->data( index, PackageListModel::NameRole ).toString();
-                m_introduction.description = model->data( index, PackageListModel::DescriptionRole ).toString();
-                m_introduction.screenshot = model->data( index, PackageListModel::ScreenshotRole ).value< QPixmap >();
-                currentChanged( QModelIndex() );
-                break;
-            }
-        }
-    }
-
+    currentChanged( QModelIndex() );
     connect( ui->products->selectionModel(),
              &QItemSelectionModel::selectionChanged,
              this,
              &PackageChooserPage::updateLabels );
+}
+
+void
+PackageChooserPage::setSelection( const QModelIndex& index )
+{
+    if ( index.isValid() )
+    {
+        ui->products->selectionModel()->select( index, QItemSelectionModel::Select );
+        currentChanged( index );
+    }
 }
 
 bool
@@ -140,4 +174,12 @@ PackageChooserPage::selectedPackageIds() const
         }
     }
     return ids;
+}
+
+void
+PackageChooserPage::setIntroduction( const PackageItem& item )
+{
+    m_introduction.name = item.name;
+    m_introduction.description = item.description;
+    m_introduction.screenshot = item.screenshot;
 }

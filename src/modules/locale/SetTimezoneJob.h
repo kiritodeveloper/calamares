@@ -19,15 +19,14 @@
 #ifndef SETTIMEZONEJOB_H
 #define SETTIMEZONEJOB_H
 
-#include <Job.h>
+#include "Job.h"
 
 
 class SetTimezoneJob : public Calamares::Job
 {
     Q_OBJECT
 public:
-    SetTimezoneJob( const QString& region,
-                   const QString& zone );
+    SetTimezoneJob( const QString& region, const QString& zone );
 
     QString prettyName() const override;
     Calamares::JobResult exec() override;

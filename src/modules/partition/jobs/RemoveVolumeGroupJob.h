@@ -19,7 +19,8 @@
 #ifndef REMOVEVOLUMEGROUPJOB_H
 #define REMOVEVOLUMEGROUPJOB_H
 
-#include <Job.h>
+#include "Job.h"
+#include "partition/KPMManager.h"
 
 class LvmDevice;
 
@@ -35,7 +36,8 @@ public:
     Calamares::JobResult exec() override;
 
 private:
+    CalamaresUtils::Partition::KPMManager m_kpmcore;
     LvmDevice* m_device;
 };
 
-#endif // REMOVEVOLUMEGROUPJOB_H
+#endif  // REMOVEVOLUMEGROUPJOB_H

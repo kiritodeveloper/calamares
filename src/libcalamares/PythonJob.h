@@ -1,6 +1,7 @@
 /* === This file is part of Calamares - <https://github.com/calamares> ===
- *
- *   Copyright 2014, Teo Mrnjavac <teo@kde.org>
+ * 
+ *   SPDX-FileCopyrightText: 2014 Teo Mrnjavac <teo@kde.org>
+ *   SPDX-FileCopyrightText: 2020 Adriaan de Groot <groot@kde.org>
  *
  *   Calamares is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -14,14 +15,21 @@
  *
  *   You should have received a copy of the GNU General Public License
  *   along with Calamares. If not, see <http://www.gnu.org/licenses/>.
+ *
+ *   SPDX-License-Identifier: GPL-3.0-or-later
+ *   License-Filename: LICENSE
+ *
  */
 
 #ifndef CALAMARES_PYTHONJOB_H
 #define CALAMARES_PYTHONJOB_H
 
 #include "Job.h"
+#include "modulesystem/InstanceKey.h"
 
-#include <QVariant>
+#include <QVariantMap>
+
+#include <memory>
 
 namespace CalamaresPython
 {
@@ -36,7 +44,8 @@ class PythonJob : public Job
 {
     Q_OBJECT
 public:
-    explicit PythonJob( const QString& scriptFile,
+    explicit PythonJob( const ModuleSystem::InstanceKey& instance,
+                        const QString& scriptFile,
                         const QString& workingPath,
                         const QVariantMap& moduleConfiguration = QVariantMap(),
                         QObject* parent = nullptr );
@@ -46,16 +55,20 @@ public:
     QString prettyStatusMessage() const override;
     JobResult exec() override;
 
+    virtual qreal getJobWeight() const override;
+
 private:
-    friend class CalamaresPython::Helper;
+    struct Private;
+
     friend class CalamaresPython::PythonJobInterface;
     void emitProgress( double progressValue );
 
-    CalamaresPython::Helper* helper();
+    std::unique_ptr< Private > m_d;
     QString m_scriptFile;
     QString m_workingPath;
     QString m_description;
     QVariantMap m_configurationMap;
+    qreal m_weight;
 };
 
 }  // namespace Calamares

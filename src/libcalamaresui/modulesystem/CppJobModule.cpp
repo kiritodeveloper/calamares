@@ -49,17 +49,17 @@ CppJobModule::loadSelf()
 {
     if ( m_loader )
     {
-        PluginFactory* pf = qobject_cast< PluginFactory* >( m_loader->instance() );
+        CalamaresPluginFactory* pf = qobject_cast< CalamaresPluginFactory* >( m_loader->instance() );
         if ( !pf )
         {
-            cDebug() << Q_FUNC_INFO << m_loader->errorString();
+            cDebug() << "Could not load module:" << m_loader->errorString();
             return;
         }
 
         CppJob* cppJob = pf->create< Calamares::CppJob >();
         if ( !cppJob )
         {
-            cDebug() << Q_FUNC_INFO << m_loader->errorString();
+            cDebug() << "Could not load module:" << m_loader->errorString();
             return;
         }
         //        cDebug() << "CppJobModule loading self for instance" << instanceKey()
@@ -86,7 +86,6 @@ CppJobModule::jobs() const
 void
 CppJobModule::initFrom( const QVariantMap& moduleDescriptor )
 {
-    Module::initFrom( moduleDescriptor );
     QDir directory( location() );
     QString load;
     if ( !moduleDescriptor.value( "load" ).toString().isEmpty() )

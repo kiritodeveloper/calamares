@@ -19,12 +19,7 @@
 #ifndef BLANKVIEWSTEP_H
 #define BLANKVIEWSTEP_H
 
-#include <QObject>
-
-#include <utils/PluginFactory.h>
-#include <viewpages/ViewStep.h>
-
-class QWidget;
+#include "viewpages/ViewStep.h"
 
 namespace Calamares
 {
@@ -39,7 +34,10 @@ class BlankViewStep : public Calamares::ViewStep
     Q_OBJECT
 
 public:
-    explicit BlankViewStep( const QString& title, const QString& description, const QString& details = QString(), QObject* parent = nullptr );
+    explicit BlankViewStep( const QString& title,
+                            const QString& description,
+                            const QString& details = QString(),
+                            QObject* parent = nullptr );
     virtual ~BlankViewStep() override;
 
     QString prettyName() const override;
@@ -61,5 +59,5 @@ private:
     QWidget* m_widget;
 };
 
-}  // namespace
+}  // namespace Calamares
 #endif  // BLANKVIEWSTEP_H

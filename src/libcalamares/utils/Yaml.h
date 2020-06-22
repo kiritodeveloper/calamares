@@ -1,7 +1,8 @@
 /* === This file is part of Calamares - <https://github.com/calamares> ===
+ * 
+ *   SPDX-FileCopyrightText: 2014 Teo Mrnjavac <teo@kde.org>
+ *   SPDX-FileCopyrightText: 2017-2018 Adriaan de Groot <groot@kde.org>
  *
- *   Copyright 2014, Teo Mrnjavac <teo@kde.org>
- *   Copyright 2017-2018, Adriaan de Groot <groot@kde.org>
  *
  *   Calamares is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -15,6 +16,10 @@
  *
  *   You should have received a copy of the GNU General Public License
  *   along with Calamares. If not, see <http://www.gnu.org/licenses/>.
+ *
+ *   SPDX-License-Identifier: GPL-3.0-or-later
+ *   License-Filename: LICENSE
+ *
  */
 
 #ifndef UTILS_YAML_H
@@ -22,6 +27,8 @@
 
 #include <QStringList>
 #include <QVariant>
+#include <QVariantList>
+#include <QVariantMap>
 
 class QByteArray;
 class QFileInfo;
@@ -34,6 +41,7 @@ class QFileInfo;
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
 #pragma clang diagnostic ignored "-Wshadow"
+#pragma clang diagnostic ignored "-Wfloat-equal"
 #endif
 
 #include <yaml-cpp/yaml.h>
@@ -59,8 +67,8 @@ QVariantMap loadYaml( const QFileInfo&, bool* ok = nullptr );
 
 QVariant yamlToVariant( const YAML::Node& node );
 QVariant yamlScalarToVariant( const YAML::Node& scalarNode );
-QVariant yamlSequenceToVariant( const YAML::Node& sequenceNode );
-QVariant yamlMapToVariant( const YAML::Node& mapNode );
+QVariantList yamlSequenceToVariant( const YAML::Node& sequenceNode );
+QVariantMap yamlMapToVariant( const YAML::Node& mapNode );
 
 /// @brief Returns all the elements of @p listNode in a StringList
 QStringList yamlToStringList( const YAML::Node& listNode );

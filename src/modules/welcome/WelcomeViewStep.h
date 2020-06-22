@@ -16,29 +16,29 @@
  *   along with Calamares. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef WELCOMEPAGEPLUGIN_H
-#define WELCOMEPAGEPLUGIN_H
+#ifndef WELCOMEVIEWSTEP_H
+#define WELCOMEVIEWSTEP_H
+
+
+#include "DllMacro.h"
+#include "modulesystem/Requirement.h"
+#include "utils/PluginFactory.h"
+#include "viewpages/ViewStep.h"
 
 #include <QObject>
-
-#include <modulesystem/Requirement.h>
-#include <utils/PluginFactory.h>
-#include <viewpages/ViewStep.h>
-
-#include <PluginDllMacro.h>
-
 #include <QVariantMap>
 
 class WelcomePage;
 class GeneralRequirements;
+class Config;
 
 namespace CalamaresUtils
 {
-    namespace GeoIP
-    {
-        class Handler;
-    }
-}  // namespace
+namespace GeoIP
+{
+class Handler;
+}
+}  // namespace CalamaresUtils
 
 class PLUGINDLLEXPORT WelcomeViewStep : public Calamares::ViewStep
 {
@@ -73,10 +73,11 @@ public:
     Calamares::RequirementsList checkRequirements() override;
 
 private:
+    Config* m_conf;
     WelcomePage* m_widget;
     GeneralRequirements* m_requirementsChecker;
 };
 
 CALAMARES_PLUGIN_FACTORY_DECLARATION( WelcomeViewStepFactory )
 
-#endif // WELCOMEPAGEPLUGIN_H
+#endif  // WELCOMEVIEWSTEP_H

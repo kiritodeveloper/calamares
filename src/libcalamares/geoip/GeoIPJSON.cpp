@@ -1,7 +1,7 @@
-/* === This file is part of Calamares - <http://github.com/calamares> ===
- *
- *   Copyright 2014-2016, Teo Mrnjavac <teo@kde.org>
- *   Copyright 2018, Adriaan de Groot <groot@kde.org>
+/* === This file is part of Calamares - <https://github.com/calamares> ===
+ * 
+ *   SPDX-FileCopyrightText: 2014-2016 Teo Mrnjavac <teo@kde.org>
+ *   SPDX-FileCopyrightText: 2018 Adriaan de Groot <groot@kde.org>
  *
  *   Calamares is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -15,6 +15,10 @@
  *
  *   You should have received a copy of the GNU General Public License
  *   along with Calamares. If not, see <http://www.gnu.org/licenses/>.
+ *
+ *   SPDX-License-Identifier: GPL-3.0-or-later
+ *   License-Filename: LICENSE
+ *
  */
 
 #include "GeoIPJSON.h"
@@ -30,7 +34,7 @@ namespace CalamaresUtils
 namespace GeoIP
 {
 
-GeoIPJSON::GeoIPJSON(const QString& attribute)
+GeoIPJSON::GeoIPJSON( const QString& attribute )
     : Interface( attribute.isEmpty() ? QStringLiteral( "time_zone" ) : attribute )
 {
 }
@@ -42,19 +46,25 @@ GeoIPJSON::GeoIPJSON(const QString& attribute)
  * "foo" of @p m, like a regular JSON lookup would.
  */
 static QString
-selectMap( const QVariantMap& m, const QStringList& l, int index)
+selectMap( const QVariantMap& m, const QStringList& l, int index )
 {
     if ( index >= l.count() )
+    {
         return QString();
+    }
 
-    QString attributeName = l[index];
+    QString attributeName = l[ index ];
     if ( index == l.count() - 1 )
+    {
         return CalamaresUtils::getString( m, attributeName );
+    }
     else
     {
         bool success = false;  // bogus
         if ( m.contains( attributeName ) )
-            return selectMap( CalamaresUtils::getSubMap( m, attributeName, success ), l, index+1 );
+        {
+            return selectMap( CalamaresUtils::getSubMap( m, attributeName, success ), l, index + 1 );
+        }
         return QString();
     }
 }
@@ -67,18 +77,18 @@ GeoIPJSON::rawReply( const QByteArray& data )
         YAML::Node doc = YAML::Load( data );
 
         QVariant var = CalamaresUtils::yamlToVariant( doc );
-        if ( !var.isNull() &&
-            var.isValid() &&
-            var.type() == QVariant::Map )
+        if ( !var.isNull() && var.isValid() && var.type() == QVariant::Map )
         {
-            return selectMap( var.toMap(), m_element.split('.'), 0 );
+            return selectMap( var.toMap(), m_element.split( '.' ), 0 );
         }
         else
+        {
             cWarning() << "Invalid YAML data for GeoIPJSON";
+        }
     }
     catch ( YAML::Exception& e )
     {
-        CalamaresUtils::explainYamlException( e, data, "GeoIP data");
+        CalamaresUtils::explainYamlException( e, data, "GeoIP data" );
     }
 
     return QString();
@@ -90,5 +100,5 @@ GeoIPJSON::processReply( const QByteArray& data )
     return splitTZString( rawReply( data ) );
 }
 
-}
-}  // namespace
+}  // namespace GeoIP
+}  // namespace CalamaresUtils

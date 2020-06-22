@@ -20,6 +20,7 @@
 #define DEACTIVATEVOLUMEGROUPJOB_H
 
 #include "Job.h"
+#include "partition/KPMManager.h"
 
 class LvmDevice;
 
@@ -35,7 +36,8 @@ public:
     Calamares::JobResult exec() override;
 
 private:
+    CalamaresUtils::Partition::KPMManager m_kpmcore;
     LvmDevice* m_device;
 };
 
-#endif // DEACTIVATEVOLUMEGROUPJOB_H
+#endif  // DEACTIVATEVOLUMEGROUPJOB_H

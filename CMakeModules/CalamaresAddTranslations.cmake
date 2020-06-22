@@ -13,7 +13,7 @@
 #   You should have received a copy of the GNU General Public License
 #   along with Calamares. If not, see <http://www.gnu.org/licenses/>.
 #
-#   SPDX-License-Identifier: GPL-3.0+
+#   SPDX-License-Identifier: GPL-3.0-or-later
 #   License-Filename: LICENSE
 #
 ###
@@ -67,8 +67,12 @@ macro(add_calamares_translations language)
     # calamares and qt language files
     set( calamares_i18n_qrc_content "${calamares_i18n_qrc_content}<qresource prefix=\"/lang\">\n" )
     foreach( lang ${CALAMARES_LANGUAGES} )
-        set( calamares_i18n_qrc_content "${calamares_i18n_qrc_content}<file>calamares_${lang}.qm</file>\n" )
-        list( APPEND TS_FILES "${CMAKE_SOURCE_DIR}/lang/calamares_${lang}.ts" )
+        foreach( tlsource "calamares_${lang}" "tz_${lang}" )
+            if( EXISTS "${CMAKE_SOURCE_DIR}/lang/${tlsource}.ts" )
+                set( calamares_i18n_qrc_content "${calamares_i18n_qrc_content}<file>${tlsource}.qm</file>\n" )
+                list( APPEND TS_FILES "${CMAKE_SOURCE_DIR}/lang/${tlsource}.ts" )
+            endif()
+        endforeach()
     endforeach()
 
     set( calamares_i18n_qrc_content "${calamares_i18n_qrc_content}</qresource>\n" )

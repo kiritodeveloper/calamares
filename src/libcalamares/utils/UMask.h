@@ -1,6 +1,7 @@
 /* === This file is part of Calamares - <https://github.com/calamares> ===
+ * 
+ *   SPDX-FileCopyrightText: 2019 Adriaan de Groot <groot@kde.org>
  *
- *   Copyright 2019, Adriaan de Groot <groot@kde.org>
  *
  *   Calamares is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -14,8 +15,11 @@
  *
  *   You should have received a copy of the GNU General Public License
  *   along with Calamares. If not, see <http://www.gnu.org/licenses/>.
+ *
+ *   SPDX-License-Identifier: GPL-3.0-or-later
+ *   License-Filename: LICENSE
+ *
  */
-
 #ifndef UTILS_UMASK_H
 #define UTILS_UMASK_H
 
@@ -25,7 +29,10 @@
 
 namespace CalamaresUtils
 {
-/// @brief Wrapper for umask(2)
+/** @brief Wrapper for umask(2)
+ *
+ * Like umask(2), sets the umask and returns the previous value of the mask.
+ */
 DLLEXPORT mode_t setUMask( mode_t u );
 
 /** @brief RAII for setting and re-setting umask.

@@ -40,7 +40,7 @@ class GlobalStorage : public QObject
     Q_OBJECT
 public:
     explicit GlobalStorage( Calamares::GlobalStorage* gs );
-    virtual ~GlobalStorage() {}
+    virtual ~GlobalStorage() { }
 
 public slots:
     bool contains( const QString& key ) const;
@@ -54,4 +54,4 @@ private:
     Calamares::GlobalStorage* m_gs;
 };
 
-#endif // PYTHONQTGLOBALSTORAGEWRAPPER_H
+#endif  // PYTHONQTGLOBALSTORAGEWRAPPER_H

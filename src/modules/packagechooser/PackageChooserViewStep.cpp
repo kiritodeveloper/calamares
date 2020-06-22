@@ -18,12 +18,21 @@
 
 #include "PackageChooserViewStep.h"
 
+#ifdef HAVE_XML
+#include "ItemAppData.h"
+#endif
+#ifdef HAVE_APPSTREAM
+#include "ItemAppStream.h"
+#include <AppStreamQt/pool.h>
+#include <memory>
+#endif
 #include "PackageChooserPage.h"
 #include "PackageModel.h"
 
 #include "GlobalStorage.h"
 #include "JobQueue.h"
 
+#include "locale/TranslatableConfiguration.h"
 #include "utils/CalamaresUtilsSystem.h"
 #include "utils/Logger.h"
 #include "utils/Variant.h"
@@ -38,6 +47,7 @@ PackageChooserViewStep::PackageChooserViewStep( QObject* parent )
     , m_widget( nullptr )
     , m_model( nullptr )
     , m_mode( PackageChooserMode::Required )
+    , m_stepName( nullptr )
 {
     emit nextStatusChanged( false );
 }
@@ -50,13 +60,14 @@ PackageChooserViewStep::~PackageChooserViewStep()
         m_widget->deleteLater();
     }
     delete m_model;
+    delete m_stepName;
 }
 
 
 QString
 PackageChooserViewStep::prettyName() const
 {
-    return tr( "Packages" );
+    return m_stepName ? m_stepName->get() : tr( "Packages" );
 }
 
 
@@ -133,6 +144,14 @@ PackageChooserViewStep::isAtEnd() const
     return true;
 }
 
+void
+PackageChooserViewStep::onActivate()
+{
+    if ( !m_widget->hasSelection() )
+    {
+        m_widget->setSelection( m_defaultIdx );
+    }
+}
 
 void
 PackageChooserViewStep::onLeave()
@@ -159,12 +178,12 @@ void
 PackageChooserViewStep::setConfigurationMap( const QVariantMap& configurationMap )
 {
     QString mode = CalamaresUtils::getString( configurationMap, "mode" );
-    bool ok = false;
+    bool mode_ok = false;
     if ( !mode.isEmpty() )
     {
-        m_mode = roleNames().find( mode, ok );
+        m_mode = roleNames().find( mode, mode_ok );
     }
-    if ( !ok )
+    if ( !mode_ok )
     {
         m_mode = PackageChooserMode::Required;
     }
@@ -173,9 +192,21 @@ PackageChooserViewStep::setConfigurationMap( const QVariantMap& configurationMap
     if ( m_id.isEmpty() )
     {
         // Not set, so use the instance id
-        // TODO: use a stronger type than QString for structured IDs
-        m_id = moduleInstanceKey().split( '@' ).last();
+        m_id = moduleInstanceKey().id();
     }
+
+    bool labels_ok = false;
+    auto labels = CalamaresUtils::getSubMap( configurationMap, "labels", labels_ok );
+    if ( labels_ok )
+    {
+        if ( labels.contains( "step" ) )
+        {
+            m_stepName = new CalamaresUtils::Locale::TranslatedString( labels, "step" );
+        }
+    }
+
+    QString default_item_id = CalamaresUtils::getString( configurationMap, "default" );
+    m_defaultIdx = QModelIndex();
 
     bool first_time = !m_model;
     if ( configurationMap.contains( "items" ) )
@@ -186,6 +217,22 @@ PackageChooserViewStep::setConfigurationMap( const QVariantMap& configurationMap
     if ( first_time && m_widget && m_model )
     {
         hookupModel();
+    }
+
+    // find default item
+    if ( first_time && m_model && !default_item_id.isEmpty() )
+    {
+        for ( int item_n = 0; item_n < m_model->packageCount(); ++item_n )
+        {
+            QModelIndex item_idx = m_model->index( item_n, 0 );
+            QVariant item_id = m_model->data( item_idx, PackageListModel::IdRole );
+
+            if ( item_id.toString() == default_item_id )
+            {
+                m_defaultIdx = item_idx;
+                break;
+            }
+        }
     }
 }
 
@@ -203,6 +250,11 @@ PackageChooserViewStep::fillModel( const QVariantList& items )
         return;
     }
 
+#ifdef HAVE_APPSTREAM
+    std::unique_ptr< AppStream::Pool > pool;
+    bool poolOk = false;
+#endif
+
     cDebug() << "Loading PackageChooser model items from config";
     int item_index = 0;
     for ( const auto& item_it : items )
@@ -217,7 +269,28 @@ PackageChooserViewStep::fillModel( const QVariantList& items )
 
         if ( item_map.contains( "appdata" ) )
         {
-            m_model->addPackage( PackageItem::fromAppData( item_map ) );
+#ifdef HAVE_XML
+            m_model->addPackage( fromAppData( item_map ) );
+#else
+            cWarning() << "Loading AppData XML is not supported.";
+#endif
+        }
+        else if ( item_map.contains( "appstream" ) )
+        {
+#ifdef HAVE_APPSTREAM
+            if ( !pool )
+            {
+                pool = std::make_unique< AppStream::Pool >();
+                pool->setLocale( QStringLiteral( "ALL" ) );
+                poolOk = pool->load();
+            }
+            if ( pool && poolOk )
+            {
+                m_model->addPackage( fromAppStream( *pool, item_map ) );
+            }
+#else
+            cWarning() << "Loading AppStream data is not supported.";
+#endif
         }
         else
         {
@@ -236,4 +309,13 @@ PackageChooserViewStep::hookupModel()
     }
 
     m_widget->setModel( m_model );
+    for ( int i = 0; i < m_model->packageCount(); ++i )
+    {
+        const auto& package = m_model->packageData( i );
+        if ( package.id.isEmpty() )
+        {
+            m_widget->setIntroduction( package );
+            break;
+        }
+    }
 }

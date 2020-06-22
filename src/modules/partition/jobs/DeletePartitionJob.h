@@ -20,7 +20,7 @@
 #ifndef DELETEPARTITIONJOB_H
 #define DELETEPARTITIONJOB_H
 
-#include <jobs/PartitionJob.h>
+#include "PartitionJob.h"
 
 class Device;
 class Partition;
@@ -44,10 +44,7 @@ public:
     Calamares::JobResult exec() override;
 
     void updatePreview();
-    Device* device() const
-    {
-        return m_device;
-    }
+    Device* device() const { return m_device; }
 
 private:
     Device* m_device;

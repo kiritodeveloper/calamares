@@ -1,8 +1,9 @@
 /* === This file is part of Calamares - <https://github.com/calamares> ===
+ * 
+ *   SPDX-FileCopyrightText: 2010-2011 Christian Muehlhaeuser <muesli@tomahawk-player.org>
+ *   SPDX-FileCopyrightText: 2014 Teo Mrnjavac <teo@kde.org>
+ *   SPDX-FileCopyrightText: 2017 Adriaan de Groot <groot@kde.org>
  *
- *   Copyright 2010-2011, Christian Muehlhaeuser <muesli@tomahawk-player.org>
- *   Copyright 2014,      Teo Mrnjavac <teo@kde.org>
- *   Copyright 2017-2019, Adriaan de Groot <groot@kde.org>
  *
  *   Calamares is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -11,11 +12,15 @@
  *
  *   Calamares is distributed in the hope that it will be useful,
  *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  *   GNU General Public License for more details.
  *
  *   You should have received a copy of the GNU General Public License
  *   along with Calamares. If not, see <http://www.gnu.org/licenses/>.
+ *
+ *   SPDX-License-Identifier: GPL-3.0-or-later
+ *   License-Filename: LICENSE
+ *
  */
 
 #include "Logger.h"
@@ -43,6 +48,10 @@ static unsigned int s_threshold =
     Logger::LOGEXTRA + 1;  // Comparison is < in log() function
 #endif
 static QMutex s_mutex;
+
+static const char s_Continuation[] = "\n    ";
+static const char s_SubEntry[] = " .. ";
+
 
 namespace Logger
 {
@@ -172,22 +181,39 @@ setupLogfile()
     qInstallMessageHandler( CalamaresLogHandler );
 }
 
-CLog::CLog( unsigned int debugLevel )
+CDebug::CDebug( unsigned int debugLevel, const char* func )
     : QDebug( &m_msg )
     , m_debugLevel( debugLevel )
+    , m_funcinfo( func )
 {
+    if ( debugLevel <= LOGERROR )
+    {
+        m_msg = QStringLiteral( "ERROR:" );
+    }
+    else if ( debugLevel <= LOGWARNING )
+    {
+        m_msg = QStringLiteral( "WARNING:" );
+    }
 }
 
 
-CLog::~CLog()
+CDebug::~CDebug()
 {
+    if ( m_funcinfo )
+    {
+        m_msg.prepend( s_Continuation );  // Prepending, so back-to-front
+        m_msg.prepend( m_funcinfo );
+    }
     log( m_msg.toUtf8().data(), m_debugLevel );
 }
 
-CDebug::~CDebug() {}
+constexpr FuncSuppressor::FuncSuppressor( const char s[] )
+    : m_s( s )
+{
+}
 
-const char Continuation[] = "\n    ";
-const char SubEntry[] = " .. ";
+const constexpr FuncSuppressor Continuation( s_Continuation );
+const constexpr FuncSuppressor SubEntry( s_SubEntry );
 
 QString
 toString( const QVariant& v )

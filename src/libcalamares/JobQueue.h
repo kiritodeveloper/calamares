@@ -1,6 +1,6 @@
 /* === This file is part of Calamares - <https://github.com/calamares> ===
- *
- *   Copyright 2014-2015, Teo Mrnjavac <teo@kde.org>
+ * 
+ *   SPDX-FileCopyrightText: 2014-2015 Teo Mrnjavac <teo@kde.org>
  *
  *   Calamares is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -14,6 +14,10 @@
  *
  *   You should have received a copy of the GNU General Public License
  *   along with Calamares. If not, see <http://www.gnu.org/licenses/>.
+ *
+ *   SPDX-License-Identifier: GPL-3.0-or-later
+ *   License-Filename: LICENSE
+ *
  */
 
 #ifndef CALAMARES_JOBQUEUE_H
@@ -45,6 +49,11 @@ public:
     void enqueue( const JobList& jobs );
     void start();
 
+    bool isRunning() const { return !m_finished; }
+
+public slots:
+    void finish();
+
 signals:
     void queueChanged( const JobList& jobs );
     void progress( qreal percent, const QString& prettyName );
@@ -57,6 +66,7 @@ private:
     JobList m_jobs;
     JobThread* m_thread;
     GlobalStorage* m_storage;
+    bool m_finished = true;  ///< Initially, not running
 };
 
 }  // namespace Calamares

@@ -31,17 +31,24 @@ class WelcomePage;
 }
 
 class CheckerContainer;
-
+class Config;
 class WelcomePage : public QWidget
 {
     Q_OBJECT
 public:
-    explicit WelcomePage( QWidget* parent = nullptr );
+    explicit WelcomePage( Config* conf, QWidget* parent = nullptr );
 
-    /// @brief Configure the buttons for URLs from the branding configuration
-    void setUpLinks( bool showSupportUrl,
-                     bool showKnownIssuesUrl,
-                     bool showReleaseNotesUrl );
+    enum class Button
+    {
+        Support,
+        Donate,
+        KnownIssues,
+        ReleaseNotes
+    };
+
+    /// @brief Configure the button @p n, to open @p url
+    void setupButton( Button b, const QString& url );
+
     /// @brief Set international language-selector icon
     void setLanguageIcon( QPixmap );
 
@@ -50,8 +57,15 @@ public:
 
     /// @brief Change the language from an external source.
     void externallySelectedLanguage( int row );
+
+    void init();
+
+public slots:
+    void retranslate();
+    void showAboutBox();
+
 protected:
-    void focusInEvent( QFocusEvent* e ) override; //choose the child widget to focus
+    void focusInEvent( QFocusEvent* e ) override;  //choose the child widget to focus
 
 private:
     /// @brief Fill the list of languages with the available translations
@@ -59,7 +73,9 @@ private:
 
     Ui::WelcomePage* ui;
     CheckerContainer* m_checkingWidget;
-    CalamaresUtils::Locale::LabelModel *m_languages;
+    CalamaresUtils::Locale::LabelModel* m_languages;
+
+    Config* m_conf;
 };
 
 /** @brief Delegate to display language information in two columns.
@@ -72,6 +88,6 @@ public:
     using QStyledItemDelegate::QStyledItemDelegate;
 
     void paint( QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index ) const override;
-} ;
+};
 
-#endif // WELCOMEPAGE_H
+#endif  // WELCOMEPAGE_H

@@ -3,13 +3,447 @@ contributors are listed. Note that Calamares does not have a historical
 changelog -- this log starts with version 3.2.0. The release notes on the
 website will have to do for older versions.
 
-# 3.2.13 (unreleased) #
+# 3.2.26 (2020-06-18) #
 
 This release contains contributions from (alphabetically by first name):
+ - Anke Boersma
+ - Gaël PORTAY
+ - Pablo Ovelleiro Corral
+ - Philip Müller
+
+## Core ##
+ - The default branch for Calamares source repositories (calamares
+   and calamares-extensions) is now *calamares*.
+ - External modules can now be built again, outside of the Calamares
+   source and build-tree.
+ - The repository *calamares-tools* has been removed. The idea behind
+   the tooling was to provide schema validation for Calamares configuration
+   files. This has been merged into the primary repository, where it
+   is now part of the test suite.
+
+## Modules ##
+ - *locale* put some more places into the correct timezone **visually**;
+   for instance Norfolk Island gave up UTC+11.5 in 2015 and is now
+   UTC+11, but Calamares still showed it in a zone separate from UTC+11.
+ - *localeq* can now properly switch between on & offline mode, 
+   it detects internet status through js.
+ - *packages* gained support for the Void Linux package manager,
+   *xbps*. (thanks Pablo)
+ - *tracking* now supports kuserfeedback configuration.
+ - *welcomeq* added the GEOIP configuration option, so locale can be
+   initially set according to IP address.
+
+
+# 3.2.25 (2020-06-06) #
+
+This release contains contributions from (alphabetically by first name):
+ - Anke Boersma
+ - Callum Farmer
+ - FLVAL
+ - Gaël PORTAY
+
+## Core ##
+ - The slideshow in `branding.desc` can be configured with QML (recommended,
+   as it has been for the past umpteen releases) or with a list of
+   images (new).
+ - It is possible to turn off all the new QML code -- navigation, slideshow,
+   QML-based modules -- with a single `-DWITH_QML=OFF` at CMake time.
+   This removes QML from Calamares' dependency footprint (but only saves
+   200kB in Calamares itself).
+ - Tests have been extended and now support a tests/CMakeTests.txt file
+   for fine-tuning tests for Python modules.
+ - SPDX identifiers are used much more widely and consistently in Calamares.
+   (thanks Callum)
+
+## Modules ##
+ - The QML based *welcomeq* module is now a viable alternative to the
+   *welcome*(widgets based) module. Using QML files means it no longer
+   is needed to have pop-up windows for additional information or warnings,
+   all loads in the Calamares window itself.  Additional features include the
+   option to customize the *About* info and load files like Release Notes
+   direct into Calamares, QML files added to the branding directory can be used.
+ - The *welcome* and *locale* modules that do GeoIP lookup can now also
+   use "fixed" style; this just negates the GeoIP lookup and substitutes a
+   constant (fixed) value; useful for testing specific locales.
+ - The *keyboard* module no longer uses *ca_eng* keyboards in Canada by
+   default, but sticks to the *us* keyboard. #1419
+
+
+# 3.2.24 (2020-05-11) #
+
+This release contains contributions from (alphabetically by first name):
+ - Bill Auger
+ - Gaël PORTAY
+ - Luna Jernberg
+ - Philip Müller
+
+## Core ##
+ - There is now a bash-completions script for Calamares; turn on
+   the (CMake-time) option INSTALL_COMPLETION to get it. (Thanks Gaël)
+ - The *productWallpaper* setting is documented and works. (Thanks Bill)
+ - GlobalStorage is available to QML modules as `Global`.
+ - The height of the navigation bar in QML can be set within the
+   QML code for the navigation; if not set, try something sensible.
+ - A regression in the requirements-checker which could block the
+   installer from proceeding without telling the user **why** it
+   was blocked, has been resolved.
+
+## Modules ##
+ - The *bootloader* module can force a UEFI-based machine to boot into
+   the newly-installed system. #1394 (Thanks Gaël)
+ - *partition* Pop-ups about boot flags use the right flag names. #1192
+
+
+# 3.2.23 (2020-04-17) #
+
+This release contains contributions from (alphabetically by first name):
+ - FLVAL
+
+## Core ##
+ - Some strange annotations were added to the *About* dialog text in
+   all the translations, like `{1?}`. These have been removed again.
+
+## Modules ##
+ - *locale* module had some errors in timezone data, where clicking
+   on a city would select a different timezone. Some of these are
+   now fixed (thanks FLVAL). #1374
+ - *netinstall* supports a wider variety of package naming schemes,
+   and is more flexible in loading a `netinstall.yaml` that is copied from
+   the example configuration file, *groups* key and all. #1369
+ - *users* module logs a full error message from libpwquality if something
+   is wrong internally.
+
+
+# 3.2.22 (2020-04-08) #
+
+This release contains contributions from (alphabetically by first name):
+ - Anke Boersma
+ - Camilo Higuita
+
+## Core ##
+ - Both the sidebar (on the left) and the navigation buttons (along the
+   bottom of the window) can now be configured to use the traditional
+   *widgets*, to use *qml*, or *hidden* from view (hiding the navigation
+   is not recommended unless you have a pure-QML UI to run inside
+   Calamares). The example QML that is compiled into Calamares has
+   been improved. To use your own QML, put files `calamares-sidebar.qml`
+   or `calamares-navigation.qml` into the branding directory.
+ - The sidebar and navigation can now be placed on any side of the
+   main window. This is probably only useful for QML-based UIs.
+   See `branding.desc` for details.
+
+## Modules ##
+ - The *welcomeq* module has been improved with better layout and
+   nicer buttons in the example QML form. (Thanks to Anke Boersma)
+ - The *keyboardq* and *localeq* modules now provide some QML for
+   configuring these parts, although they are still very primitive.
+ - *netinstall* has had some minor layout fixes.
+ - *unpackfs* has much more detailed progress reporting and no
+   longer jumps around strangely in overall progress.
+ - *partition* now correctly marks a partition as bootable in BIOS + MBR
+   installs. #1175
+
+
+# 3.2.21 (2020-03-27) #
+
+This release contains contributions from (alphabetically by first name):
+ - Anke Boersma
+ - Camilo Higuita
+ - Gabriel Craciunescu
+ - Gaël PORTAY
+
+## Core ##
+ - Python job modules (such as *unpackfs* or *packages*) can now provide
+   a `pretty_status_message()` function, like the existing `pretty_name()`
+   function, that is used to update the status during install. #1330
+ - QML support-modules and objects are now registered into the io.calamares
+   namespace. This affects modules using Calamares models inside their
+   QML UI (at this point, very few). With this release, the necessary
+   `import` for Calamares parts looks like
+   > ```import io.calamares.ui 1.0```
+   A complete list of objects available from Calamares van be found in the
+   documentation in `Qml.h`.
+ - The sidebar (which shows overall progress in the installation) is now
+   more configurable: the branding key *sidebar* controls it. The sidebar
+   can be shown as a widget (default, as it has been), hidden, or use a
+   new QML view which is more easily customised.
+ - A new `settings.conf` key *quit-at-end* will automatically close
+   Calamares (by clicking on the *Done* button) when the end of the
+   sequence is reached. If *finished* is the last module in the sequence,
+   this will run whatever it is configured for; you can also leave out
+   the finished page and Calamares will close after the exec parts.
+
+## Modules ##
+ - *packages* now reports more details in the installation progress-bar.
+ - *netinstall* module supports an `expanded` key, which will pre-expand
+   a group (as if the user had pressed the arrow-button in the tree-view).
+   This only affects the UI, and only the **outermost** level of groups.
+ - *netinstall* module now supports a special value for *groupsUrl*.
+   Setting this to *local* will read the groups directly from the
+   configuration file.
+ - *netinstall* groups now support a new key `immutable` which prevents
+   their check-state from being changed (they are shown, or hidden,
+   as usual and can be expanded).
+ - Modules that use QML need a new import line. The QML file for the
+   module is configured through new keys *qmlSearch* and *qmlFilename*
+   (previously those were without the `qml` prefix, which invites name
+   collisions). The full module identifier is also used as a filename,
+   so that multiple instances of a module can use different QML files.
+ - *partition* module has a number of new features and settings for
+   type, UUID, and filesystem characteristics. Thanks to Gaël.
+
+
+# 3.2.20 (2020-02-27) #
+
+This release contains contributions from (alphabetically by first name):
+ - Bart Ribbers
+
+## Core ##
+ - When logging level is set to 8 (eight), for instance via the `-D8`
+   logging flag, or the `-d` debug flag, the *Show debug information*
+   button will appear in the progress view. This helps with debugging
+   issues where the `-d` flag would be inappropriate.
+ - Calamares now starts at logging level 1 (warnings and errors to
+   the console) by default. Previously it (wrongly) started at level 8.
+
+## Modules ##
+ - The *partition* module now stores which filesystems are in use in
+   global storage.
+ - The *contextualprocess* module now understands "compound variable
+   names", where a dot (.) is used to index into structured data
+   stored in global storage. This allows it to use the map stored
+   by the partition module (but also other things, like looking into
+   the branding information).
+ - The *packages* module now understands "apk", the Alpine Linux
+   package manager.
+
+
+# 3.2.19.1 (2020-02-24) #
+
+This is a hotfix release for bugs in the *users* module.
+Reported by Philip Mueller and Walter Lapchynski.
+
+## Modules ##
+ - The *users* module no longer wrote `/etc/hostname` at all.
+ - The *users* module erroneously shows the root password input fields.
+ - The *initramfs* module sets a resume-hook even when there is no swap.
+ - The partitioning service expects *udevadm* in `/sbin`, but some
+   distro's place it elsewhere.
+ - The mount service didn't unmount directories properly, leading to
+   blocked installations.
+
+
+# 3.2.19 (2020-02-21) #
+
+This release contains contributions from (alphabetically by first name):
+ - Anke Boersma
+ - Camilo Higuita
+ - Gabriel Craciunescu
+
+## Core ##
+ - *Assamese* translation has been completed.
+ - Translations are now loaded from more places: instead of **only**
+   being compiled in to the Calamares executable, they can now be
+   read from the current directory (when Calamares is run in developer
+   mode) and from the application data directory.This allows updating the
+   translations without requiring a recompile: helpful for translators
+   and possibly for distributions with their own translation style.
+   See the translators and deployers wiki for details.
+ - A new `ViewStep` base class, `QmlViewStep`, has been added that loads
+   a configurable QML file and plays it. This is used by the new *notesqml*
+   module -- which is in itself a minimal wrapper around the same that
+   adds only a translatable module name.
+
+## Modules ##
+ - The *machineid* and *users* modules now prefer high-quality random
+   data from `/dev/urandom` rather than pseudo-random data. #1254
+ - A new *notesqml* module supports loading QML. This can be used for
+   "fancy" release notes as a QML application, rather than a webview
+   or text widget. Note that this does not replace the slideshow-during-
+   installation module.
+ - The *users* module now has knobs for setting the hostname and writing
+   the `/etc/hosts` file. The new configuration options are documented
+   in `users.conf`. #1140
+ - Multiple *netinstall* modules can exist side-by-side, and they each
+   control the package installation for their part of the package list.
+   Previously, a netinstall module would overwrite all of the package
+   configuration done by other netinstall modules. Translations can be
+   provided in the configuration file, `netinstall.conf`. #1303
+ - The *fstab* module no longer "claims" all the swap partitions it finds
+   on disk. It only uses swap specified for the current installation.
+   This means that "replace" and "alongside" installations will have
+   no swap configured in the target system.
+
+
+# 3.2.18 (2020-01-28) #
+
+This release contains contributions from (alphabetically by first name):
+ - Bill Auger
+
+## Core ##
+ - *Assamese* translation has been added (still in preliminary state).
+ - Timezone support code has migrated into the core of Calamares. This
+   means that modules now have easier access to timezone information.
+   Translations for timezones have also been enabled, so it is **possible**
+   at least to translate the displayed zones in the *locale* module.
+ - Branding can now specify whether to (try to) display the Calamares window
+   in the middle of the desktop or not. The *windowPlacement* key in
+   `branding.desc` specifies *center* or *free* placement.
+
+## Modules ##
+ - All modules can now set a new key in `module.desc` called *noconfig*.
+   If this key is set to `true` (the default is `false), no configuration
+   file is searched-for or loaded, and no warning is printed if the
+   configuration is missing. This should tidy up some unnecessary warnings
+   on startup. #1302 #1301
+ - The *license* module has seen a significant change to its looks.
+   Actions are now labeled more clearly, and the URL (or filename)
+   for each license is displayed.
+ - The *locale* module now supports translations for timezone and
+   location names (e.g. "Berlin" is "Berlijn" in Dutch).
+ - *Packagechooser* is a little more careful with displaying
+   default and empty package names. (thanks to Bill Auger)
+ - The *unpackfs* module now carries a larger weight in the overall
+   progress of the installation, which should resolve downstream reports
+   like "progress stops at 24% for a long time". This is currently
+   hard-coded, but will become configurable in a future release. #1176
+
+
+# 3.2.17.1 (2019-12-02) #
+
+This is a hotfix release for a bug in the grubcfg module.
+Reported by Philip Mueller and Erik Dubois.
+
+## Modules ##
+ - The *grubcfg* module had a typo in it that made installations fail.
+
+
+# 3.2.17 (2019-11-28) #
+
+This release contains contributions from (alphabetically by first name):
+ - Bill Auger
+
+## Core ##
+ - A translation "string freeze" is now enforced by the release scripts.
+
+## Modules ##
+ - A new module, *hostinfo*, places information about the host into
+   Global Storage. This can support contextualprocess modules that
+   need that information.
+ - The password-checks in the *users* module are now ordered consistently.
+   A new check *nonempty* can be used to explicitly check for a non-empty
+   password. This was previously hard-coded. If you have no other
+   password-requirements set (e.g. minimum-length) and rely on
+   Calamares to filter out empty passwords, add this check.
+ - The *grubcfg* module has a new configuration setting *keepDistributor*
+   which prevents replacing the `GRUB_DISTRIBUTION` line when writing
+   the new configuration. #1201
+ - *packagechooser* documentation has been updated.
+ - *welcome* module now works better with dark themes.
+ - The *license* module could get into a confused state, now fixed. #1271
+
+
+# 3.2.16 (2019-11-01) #
+
+This release contains contributions from (alphabetically by first name):
+ - Bill Auger
+
+## Core ##
+ - Some obscure build scenarios which would lead to bogus module-is-
+   misconfigured messages on startup have been resolved.
+
+## Modules ##
+ - The explanatory messages on the *users* page have moved to tooltips,
+   and placeholder text has been added to the fields. #1202
+ - The bad-password messages in the *users* page have been improved. #1261
+ - Password-checking in the *users* module has been substantially
+   changed. A new key *allowWeakPasswords* can be used to introduce
+   an additional checkbox to the page, which can then be used to
+   switch off strict password checking. (Thanks to Bill Auger)
+ - The icons used in password warnings on the *users* page have been
+   changed to the colorful status icons (rather than the thin red X).
+
+
+# 3.2.15 (2019-10-11) #
+
+This release contains contributions from (alphabetically by first name):
+ - No other contributors this time around.
+
+## Core ##
+ - No changes to core functionality
+
+## Modules ##
+
+ - *displaymanager* module now treats *sysconfig* as a regular entry in the
+   *displaymanagers* list, and the *sysconfigSetup* key is used as a
+   shorthand to force **only** that entry in the list. #1253
+ - *machineid* module has been re-written in C++ and extended with
+   a new configuration key to generate urandom pool data. #1252
+ - *unpackfs* now supports a special *sourcefs* value of `file`
+   for copying single files (optionally with renaming) or directory
+   trees to the target system.
+ - *unpackfs* now support an *exclude* and *excludeFile* setting for
+   excluding particular files or patters from unpacking. #1229
+
+
+# 3.2.14 (2019-09-30) #
+
+This release contains contributions from (alphabetically by first name):
+ - Andrius Štikonas
+ - Harald Sitter
+
+## Core ##
+ - No changes to core functionality
+
+## Modules ##
+
+ - *locale* module no longer recognizes the legacy GeoIP configuration.
+   This has been deprecated since Calamares 3.2.8 and is now removed.
+ - *packagechooser* module can now be custom-labeled in the overall
+   progress (left-hand column). #1228
+ - *displaymanager* module now recognizes KDE Plasma 5.17.
+ - *displaymanager* module now can handle Wayland sessions and can detect
+   sessions from their .desktop files. #1247 #1248
+ - *unpackfs* now has special handling for *sourcefs* setting "file"
+   (so you can copy single files or directories that are on the source
+   system, directly to the target). #1188 #1181
+
+
+# 3.2.13 (2019-08-30) #
+
+This release contains contributions from (alphabetically by first name):
+ - Arnaud Ferraris
+ - Arnaud Rebillout
+ - Bill Auger
+ - Kevin Kofler
 
 ## Core ##
 
+- The Calamares standard coding style -- embodied in `ci/calamaresstyle`
+  has had a few updates and has now been consistently applied across
+  the core codebase (e.g. libcalamares, libcalamaresui, calamares, but
+  not the modules).
+- *KCoreAddons* is now a required dependency. This lets us drop a chunk
+  of code that was copied from KCoreAddons years ago, and use the
+  (maintained!) upstream version instead. It also gives us KMacroExpander
+  everywhere, which will simplify code for handling substitutions
+  in configuration files.
+- *Slideshows* now have a new property *activatedInCalamares* which
+  controls the keyboard shortcuts (and can control timers and other
+  properties of the slideshow, too).
+
 ## Modules ##
+
+- The *packagechooser* module can load data from the config-file,
+  from AppData XML files referred by the config-file, and (new) also
+  from AppStream caches by referring to an application's AppStream id. #1212
+- The *partition* module now understands the units *KB*, *MB*, *GB* which
+  are powers-of-ten sizes, alongside the powers-of-two sizes that it already
+  used. (thanks to Arnaud)
+- The *welcome* module now supports a *Donate* button if *showDonateUrl*
+  is set to a non-empty URL. #1197
+- The *welcome* module can have URLs for the various buttons configured
+  directly in the module configuration (rather than in `branding.desc`).
 
 
 # 3.2.12 (2019-08-07) #

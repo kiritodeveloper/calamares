@@ -1,6 +1,6 @@
 /* === This file is part of Calamares - <https://github.com/calamares> ===
- *
- *   Copyright 2019, Adriaan de Groot <groot@kde.org>
+ * 
+ *   SPDX-FileCopyrightText: 2019 Adriaan de Groot <groot@kde.org>
  *
  *   Calamares is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -14,11 +14,16 @@
  *
  *   You should have received a copy of the GNU General Public License
  *   along with Calamares. If not, see <http://www.gnu.org/licenses/>.
+ *
+ *   SPDX-License-Identifier: GPL-3.0-or-later
+ *   License-Filename: LICENSE
+ *
  */
 
 #include "Tests.h"
 
 #include "locale/LabelModel.h"
+#include "locale/TimeZone.h"
 #include "locale/TranslatableConfiguration.h"
 
 #include "CalamaresVersion.h"
@@ -36,6 +41,7 @@ void
 LocaleTests::initTestCase()
 {
     // Otherwise plain get() is dubious in the TranslatableConfiguration tests
+    QLocale::setDefault( QLocale( QStringLiteral( "en_US" ) ) );
     QVERIFY( ( QLocale().name() == "C" ) || ( QLocale().name() == "en_US" ) );
 }
 
@@ -127,8 +133,8 @@ LocaleTests::testTranslatableConfig1()
     QCOMPARE( ts1.count(), 1 );
     QVERIFY( !ts1.isEmpty() );
 
-    QCOMPARE( ts1.get(), "Hello" );
-    QCOMPARE( ts1.get( QLocale( "nl" ) ), "Hello" );
+    QCOMPARE( ts1.get(), QStringLiteral( "Hello" ) );
+    QCOMPARE( ts1.get( QLocale( "nl" ) ), QStringLiteral( "Hello" ) );
 
     QVariantMap map;
     map.insert( "description", "description (no language)" );
@@ -136,8 +142,8 @@ LocaleTests::testTranslatableConfig1()
     QCOMPARE( ts2.count(), 1 );
     QVERIFY( !ts2.isEmpty() );
 
-    QCOMPARE( ts2.get(), "description (no language)" );
-    QCOMPARE( ts2.get( QLocale( "nl" ) ), "description (no language)" );
+    QCOMPARE( ts2.get(), QStringLiteral( "description (no language)" ) );
+    QCOMPARE( ts2.get( QLocale( "nl" ) ), QStringLiteral( "description (no language)" ) );
 }
 
 /** @bref Test strings with translations.
@@ -172,8 +178,8 @@ LocaleTests::testTranslatableConfig2()
     QCOMPARE( ts1.count(), someLanguages().count() + 1 );
     QVERIFY( !ts1.isEmpty() );
 
-    QCOMPARE( ts1.get(), "description (no language)" );  // it wasn't set
-    QCOMPARE( ts1.get( QLocale( "nl" ) ), "description (language nl)" );
+    QCOMPARE( ts1.get(), QStringLiteral( "description (no language)" ) );  // it wasn't set
+    QCOMPARE( ts1.get( QLocale( "nl" ) ), QStringLiteral( "description (language nl)" ) );
     for ( const auto& language : someLanguages() )
     {
         // Skip Serbian (latin) because QLocale() constructed with it
@@ -187,7 +193,7 @@ LocaleTests::testTranslatableConfig2()
                   language );
     }
     QCOMPARE( ts1.get( QLocale( QLocale::Language::Serbian, QLocale::Script::LatinScript, QLocale::Country::Serbia ) ),
-              "description (language sr@latin)" );
+              QStringLiteral( "description (language sr@latin)" ) );
 
     CalamaresUtils::Locale::TranslatedString ts2( map, "name" );
     // We skipped dutch this time
@@ -198,4 +204,56 @@ LocaleTests::testTranslatableConfig2()
     CalamaresUtils::Locale::TranslatedString ts3( map, "front" );
     QVERIFY( ts3.isEmpty() );
     QCOMPARE( ts3.count(), 1 );  // The empty string
+}
+
+void
+LocaleTests::testSimpleZones()
+{
+    using namespace CalamaresUtils::Locale;
+
+    {
+        TZRegion r;
+        QVERIFY( r.tr().isEmpty() );
+    }
+    {
+        TZZone n;
+        QVERIFY( n.tr().isEmpty() );
+    }
+    {
+        TZZone r0( "xAmsterdam" );
+        QCOMPARE( r0.tr(), QStringLiteral( "xAmsterdam" ) );
+        TZZone r1( r0 );
+        QCOMPARE( r0.tr(), QStringLiteral( "xAmsterdam" ) );
+        QCOMPARE( r1.tr(), QStringLiteral( "xAmsterdam" ) );
+        TZZone r2( std::move( r0 ) );
+        QCOMPARE( r2.tr(), QStringLiteral( "xAmsterdam" ) );
+        QCOMPARE( r0.tr(), QString() );
+    }
+    {
+        TZZone r0( nullptr );
+        QVERIFY( r0.tr().isEmpty() );
+        TZZone r1( r0 );
+        QVERIFY( r1.tr().isEmpty() );
+        TZZone r2( std::move( r0 ) );
+        QVERIFY( r2.tr().isEmpty() );
+    }
+}
+
+void
+LocaleTests::testComplexZones()
+{
+    using namespace CalamaresUtils::Locale;
+
+    {
+        TZZone r0( "America/New_York" );
+        TZZone r1( "America/New York" );
+
+        QCOMPARE( r0.tr(), r1.tr() );
+        QCOMPARE( r0.tr(), QStringLiteral( "America/New York" ) );
+    }
+    {
+        TZZone r( "zxc,;*_vm" );
+        QVERIFY( !r.tr().isEmpty() );
+        QCOMPARE( r.tr(), QStringLiteral( "zxc,;* vm" ) );  // Only _ is special
+    }
 }

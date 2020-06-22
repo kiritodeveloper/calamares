@@ -81,18 +81,13 @@ struct PackageItem
      */
     bool isValid() const { return !name.isEmpty(); }
 
-    /** @brief Loads an AppData XML file and returns a PackageItem
+    /** @brief Is this a (the) No-Package package?
      *
-     * The @p map must have a key *appdata*. That is used as the
-     * primary source of information, but keys *id* and *screenshotPath*
-     * may be used to override parts of the AppData -- so that the
-     * ID is under the control of Calamares, and the screenshot can be
-     * forced to a local path available on the installation medium.
-     *
-     * Requires XML support in libcalamares, if not present will
-     * return invalid PackageItems.
+     * There should be at most one No-Package item in a collection
+     * of PackageItems. That one will be used to describe a
+     * "no package" situation.
      */
-    static PackageItem fromAppData( const QVariantMap& map );
+    bool isNonePackage() const { return id.isEmpty(); }
 };
 
 using PackageList = QVector< PackageItem >;
@@ -112,6 +107,11 @@ public:
 
     int rowCount( const QModelIndex& index ) const override;
     QVariant data( const QModelIndex& index, int role ) const override;
+
+    /// @brief Direct (non-abstract) access to package data
+    const PackageItem& packageData( int r ) const { return m_packages[ r ]; }
+    /// @brief Direct (non-abstract) count of package data
+    int packageCount() const { return m_packages.count(); }
 
     enum Roles : int
     {

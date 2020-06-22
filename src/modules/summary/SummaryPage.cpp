@@ -23,13 +23,13 @@
 #include "SummaryViewStep.h"
 
 #include "Branding.h"
-#include "ExecutionViewStep.h"
 #include "Settings.h"
 #include "ViewManager.h"
 
 #include "utils/CalamaresUtilsGui.h"
 #include "utils/Logger.h"
 #include "utils/Retranslator.h"
+#include "viewpages/ExecutionViewStep.h"
 
 #include <QBoxLayout>
 #include <QLabel>
@@ -124,7 +124,7 @@ SummaryPage::onActivate()
 
         cDebug() << "Summary widget is larger than viewport, enlarge by" << enlarge << "to" << widgetSize;
 
-        emit m_thisViewStep->enlarge( QSize( 0, enlarge ) );  // Only expand height
+        emit m_thisViewStep->ensureSize( widgetSize );  // Only expand height
     }
 }
 
@@ -184,7 +184,7 @@ SummaryPage::createBodyLabel( const QString& text ) const
     QLabel* label = new QLabel;
     label->setMargin( CalamaresUtils::defaultFontHeight() / 2 );
     QPalette pal( palette() );
-    pal.setColor( QPalette::Background, palette().background().color().lighter( 108 ) );
+    pal.setColor( QPalette::Background, palette().window().color().lighter( 108 ) );
     label->setAutoFillBackground( true );
     label->setPalette( pal );
     label->setText( text );

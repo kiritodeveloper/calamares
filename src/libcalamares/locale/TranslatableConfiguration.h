@@ -1,6 +1,6 @@
 /* === This file is part of Calamares - <https://github.com/calamares> ===
- *
- *   Copyright 2019, Adriaan de Groot <groot@kde.org>
+ * 
+ *   SPDX-FileCopyrightText: 2019 Adriaan de Groot <groot@kde.org>
  *
  *   Calamares is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -14,6 +14,10 @@
  *
  *   You should have received a copy of the GNU General Public License
  *   along with Calamares. If not, see <http://www.gnu.org/licenses/>.
+ *
+ *   SPDX-License-Identifier: GPL-3.0-or-later
+ *   License-Filename: LICENSE
+ *
  */
 
 #ifndef LOCALE_TRANSLATABLECONFIGURATION_H
@@ -39,8 +43,19 @@ class DLLEXPORT TranslatedString
 {
 public:
     /** @brief Get all the translations connected to @p key
+     *
+     * Gets map[key] as the "untranslated" form, and then all the
+     * keys of the form <key>[lang] are taken as the translation
+     * for <lang> of the untranslated form.
+     *
+     * If @p context is not a nullptr, then that is taken as an
+     * indication to **also** use the regular QObject::tr() translation
+     * mechanism for these strings. It is recommended to pass in
+     * metaObject()->className() as context (from a QObject based class)
+     * to give the TranslatedString the same context as other calls
+     * to tr() within that class.
      */
-    TranslatedString( const QVariantMap& map, const QString& key );
+    TranslatedString( const QVariantMap& map, const QString& key, const char* context = nullptr );
     /** @brief Not-actually-translated string.
      */
     TranslatedString( const QString& string );
@@ -51,14 +66,14 @@ public:
     }
 
     /** @brief How many strings (translations) are there?
-     * 
+     *
      * This is always at least 1 (for the untranslated string),
      * but may be more than 1 even when isEmpty() is true --
      * if there is no untranslated version, for instance.
      */
     int count() const { return m_strings.count(); }
     /** @brief Consider this string empty?
-     * 
+     *
      * Only the state of the untranslated string is considered,
      * so count() may be more than 1 even while the string is empty.
      */
@@ -73,6 +88,7 @@ public:
 private:
     // Maps locale name to human-readable string, "" is English
     QMap< QString, QString > m_strings;
+    const char* m_context = nullptr;
 };
 }  // namespace Locale
 }  // namespace CalamaresUtils

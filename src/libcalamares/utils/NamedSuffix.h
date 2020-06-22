@@ -1,6 +1,6 @@
 /* === This file is part of Calamares - <https://github.com/calamares> ===
- *
- *   Copyright 2019, Adriaan de Groot <groot@kde.org>
+ * 
+ *   SPDX-FileCopyrightText: 2019 Adriaan de Groot <groot@kde.org>
  *
  *   Calamares is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -14,6 +14,10 @@
  *
  *   You should have received a copy of the GNU General Public License
  *   along with Calamares. If not, see <http://www.gnu.org/licenses/>.
+ *
+ *   SPDX-License-Identifier: GPL-3.0-or-later
+ *   License-Filename: LICENSE
+ *
  */
 
 /** @brief Support for unit-suffixed values.
@@ -58,7 +62,7 @@ public:
     }
 
     /** @brief Specific value and unit. */
-    NamedSuffix( int value, unit_t unit )
+    NamedSuffix( qint64 value, unit_t unit )
         : m_value( value )
         , m_unit( unit )
     {
@@ -75,7 +79,7 @@ public:
         for ( const auto& suffix : table.table )
             if ( s.endsWith( suffix.first ) )
             {
-                m_value = s.left( s.length() - suffix.first.length() ).toInt();
+                m_value = s.left( s.length() - suffix.first.length() ).toLongLong();
                 m_unit = suffix.second;
                 break;
             }
@@ -89,7 +93,7 @@ public:
      */
     NamedSuffix( const QString& s );
 
-    int value() const { return m_value; }
+    qint64 value() const { return m_value; }
     unit_t unit() const { return m_unit; }
 
     /** @brief Check that a value-unit combination is valid.
@@ -100,7 +104,7 @@ public:
     bool isValid() const;
 
 protected:
-    int m_value;
+    qint64 m_value;
     unit_t m_unit;
 };
 

@@ -28,7 +28,6 @@
 #include "core/PartitionActions.h"
 #include "core/PartitionCoreModule.h"
 #include "core/PartitionInfo.h"
-#include "core/PartitionIterator.h"
 #include "core/PartitionModel.h"
 
 #include "BootInfoWidget.h"
@@ -36,18 +35,19 @@
 #include "PartitionBarsView.h"
 #include "PartitionLabelsView.h"
 #include "PartitionSplitterWidget.h"
-#include "PrettyRadioButton.h"
 #include "ReplaceWidget.h"
 #include "ScanningDialog.h"
-
-#include "utils/CalamaresUtilsGui.h"
-#include "utils/Logger.h"
-#include "utils/Retranslator.h"
-#include "utils/Units.h"
 
 #include "Branding.h"
 #include "GlobalStorage.h"
 #include "JobQueue.h"
+#include "partition/PartitionIterator.h"
+#include "partition/PartitionQuery.h"
+#include "utils/CalamaresUtilsGui.h"
+#include "utils/Logger.h"
+#include "utils/Retranslator.h"
+#include "utils/Units.h"
+#include "widgets/PrettyRadioButton.h"
 
 #include <kpmcore/core/device.h>
 #include <kpmcore/core/partition.h>
@@ -65,6 +65,10 @@
 #include <QtConcurrent/QtConcurrent>
 
 using PartitionActions::Choices::SwapChoice;
+using CalamaresUtils::Partition::PartitionIterator;
+using CalamaresUtils::Partition::isPartitionFreeSpace;
+using CalamaresUtils::Partition::findPartitionByPath;
+using Calamares::PrettyRadioButton;
 
 /** @brief Given a set of swap choices, return a sensible value from it.
  *
@@ -255,14 +259,14 @@ ChoicePage::setupChoices()
     m_alongsideButton->setIcon( CalamaresUtils::defaultPixmap( CalamaresUtils::PartitionAlongside,
                                                                CalamaresUtils::Original,
                                                                iconSize ) );
-    m_grp->addButton( m_alongsideButton->buttonWidget(), Alongside );
+    m_alongsideButton->addToGroup( m_grp, Alongside );
 
     m_eraseButton = new PrettyRadioButton;
     m_eraseButton->setIconSize( iconSize );
     m_eraseButton->setIcon( CalamaresUtils::defaultPixmap( CalamaresUtils::PartitionEraseAuto,
                                                            CalamaresUtils::Original,
                                                            iconSize ) );
-    m_grp->addButton( m_eraseButton->buttonWidget(), Erase );
+    m_eraseButton->addToGroup( m_grp, Erase );
 
     m_replaceButton = new PrettyRadioButton;
 
@@ -270,7 +274,7 @@ ChoicePage::setupChoices()
     m_replaceButton->setIcon( CalamaresUtils::defaultPixmap( CalamaresUtils::PartitionReplaceOs,
                                                              CalamaresUtils::Original,
                                                              iconSize ) );
-    m_grp->addButton( m_replaceButton->buttonWidget(), Replace );
+    m_replaceButton->addToGroup( m_grp, Replace );
 
     // Fill up swap options
     // .. TODO: only if enabled in the config
@@ -290,7 +294,7 @@ ChoicePage::setupChoices()
                                                                    CalamaresUtils::Original,
                                                                    iconSize ) );
     m_itemsLayout->addWidget( m_somethingElseButton );
-    m_grp->addButton( m_somethingElseButton->buttonWidget(), Manual );
+    m_somethingElseButton->addToGroup( m_grp, Manual );
 
     m_itemsLayout->addStretch();
 
@@ -328,7 +332,9 @@ ChoicePage::setupChoices()
 
     CALAMARES_RETRANSLATE(
         m_somethingElseButton->setText( tr( "<strong>Manual partitioning</strong><br/>"
-                                            "You can create or resize partitions yourself." ) );
+                                            "You can create or resize partitions yourself."
+                                            " Having a GPT partition table and <strong>fat32 512Mb /boot partition "
+                                            "is a must for UEFI installs</strong>, either use an existing without formatting or create one." ) );
         updateSwapChoicesTr( m_eraseSwapChoiceComboBox );
     )
 }
@@ -554,7 +560,7 @@ ChoicePage::doAlongsideSetupSplitter( const QModelIndex& current,
     Partition* part = modl->partitionForIndex( current );
     if ( !part )
     {
-        cDebug() << Q_FUNC_INFO << "Partition not found for index" << current;
+        cDebug() << "Partition not found for index" << current;
         return;
     }
 
@@ -583,19 +589,19 @@ ChoicePage::doAlongsideSetupSplitter( const QModelIndex& current,
 void
 ChoicePage::onEncryptWidgetStateChanged()
 {
-    EncryptWidget::State state = m_encryptWidget->state();
+    EncryptWidget::Encryption state = m_encryptWidget->state();
     if ( m_choice == Erase )
     {
-        if ( state == EncryptWidget::EncryptionConfirmed ||
-             state == EncryptWidget::EncryptionDisabled )
+        if ( state == EncryptWidget::Encryption::Confirmed ||
+             state == EncryptWidget::Encryption::Disabled )
             applyActionChoice( m_choice );
     }
     else if ( m_choice == Replace )
     {
         if ( m_beforePartitionBarsView &&
              m_beforePartitionBarsView->selectionModel()->currentIndex().isValid() &&
-             ( state == EncryptWidget::EncryptionConfirmed ||
-               state == EncryptWidget::EncryptionDisabled ) )
+             ( state == EncryptWidget::Encryption::Confirmed ||
+               state == EncryptWidget::Encryption::Disabled ) )
         {
             doReplaceSelectedPartition( m_beforePartitionBarsView->
                                             selectionModel()->
@@ -691,7 +697,7 @@ ChoicePage::doAlongsideApply()
     for ( int i = 0; i < dm->rowCount(); ++i )
     {
         Device* dev = dm->deviceForIndex( dm->index( i ) );
-        Partition* candidate = KPMHelpers::findPartitionByPath( { dev }, path );
+        Partition* candidate = findPartitionByPath( { dev }, path );
         if ( candidate )
         {
             qint64 firstSector = candidate->firstSector();
@@ -754,7 +760,7 @@ ChoicePage::doReplaceSelectedPartition( const QModelIndex& current )
         Partition* selectedPartition =
             static_cast< Partition* >( current.data( PartitionModel::PartitionPtrRole )
                                        .value< void* >() );
-        if ( KPMHelpers::isPartitionFreeSpace( selectedPartition ) )
+        if ( isPartitionFreeSpace( selectedPartition ) )
         {
             //NOTE: if the selected partition is free space, we don't deal with
             //      a separate /home partition at all because there's no existing
@@ -768,7 +774,7 @@ ChoicePage::doReplaceSelectedPartition( const QModelIndex& current )
                 if ( parent && parent->roles().has( PartitionRole::Extended ) )
                 {
                     newRoles = PartitionRole( PartitionRole::Logical );
-                    newParent = KPMHelpers::findPartitionByPath( { selectedDevice() }, parent->partitionPath() );
+                    newParent = findPartitionByPath( { selectedDevice() }, parent->partitionPath() );
                 }
             }
 
@@ -782,7 +788,7 @@ ChoicePage::doReplaceSelectedPartition( const QModelIndex& current )
             // We can't use the PartitionPtrRole because we need to make changes to the
             // main DeviceModel, not the immutable copy.
             QString partPath = current.data( PartitionModel::PartitionPathRole ).toString();
-            selectedPartition = KPMHelpers::findPartitionByPath( { selectedDevice() },
+            selectedPartition = findPartitionByPath( { selectedDevice() },
                                                                  partPath );
             if ( selectedPartition )
             {
@@ -805,7 +811,7 @@ ChoicePage::doReplaceSelectedPartition( const QModelIndex& current )
                         gs->value( "defaultFileSystemType" ).toString(),
                         m_encryptWidget->passphrase()
                     } );
-                Partition* homePartition = KPMHelpers::findPartitionByPath( { selectedDevice() },
+                Partition* homePartition = findPartitionByPath( { selectedDevice() },
                                                                             *homePartitionPath );
 
                 if ( homePartition && doReuseHomePartition )
@@ -826,7 +832,7 @@ ChoicePage::doReplaceSelectedPartition( const QModelIndex& current )
         if ( !homePartitionPath->isEmpty() )
             m_reuseHomeCheckBox->setText( tr( "Reuse %1 as home partition for %2." )
                                           .arg( *homePartitionPath )
-                                          .arg( *Calamares::Branding::ShortProductName ) );
+                                          .arg( Calamares::Branding::instance()->shortProductName() ) );
         delete homePartitionPath;
 
         if ( m_isEfi )
@@ -969,7 +975,7 @@ ChoicePage::updateActionChoicePreview( ChoicePage::InstallChoice choice )
                                         .arg( m_beforePartitionBarsView->selectionModel()->currentIndex().data().toString() )
                                         .arg( CalamaresUtils::BytesToMiB( size ) )
                                         .arg( CalamaresUtils::BytesToMiB( sizeNext ) )
-                                        .arg( *Calamares::Branding::ShortProductName ) );
+                                        .arg( Calamares::Branding::instance()->shortProductName() ) );
                 }
             );
 
@@ -998,7 +1004,7 @@ ChoicePage::updateActionChoicePreview( ChoicePage::InstallChoice choice )
             m_afterPartitionBarsView->setNestedPartitionsMode( mode );
             m_afterPartitionLabelsView = new PartitionLabelsView( m_previewAfterFrame );
             m_afterPartitionLabelsView->setExtendedPartitionHidden( mode == PartitionBarsView::NoNestedPartitions );
-            m_afterPartitionLabelsView->setCustomNewRootLabel( *Calamares::Branding::BootloaderEntryName );
+            m_afterPartitionLabelsView->setCustomNewRootLabel( Calamares::Branding::instance()->string(Calamares::Branding::BootloaderEntryName) );
 
             PartitionModel* model = m_core->partitionModelForDevice( selectedDevice() );
 
@@ -1129,7 +1135,7 @@ ChoicePage::setupEfiSystemPartitionSelector()
                     tr( "An EFI system partition cannot be found anywhere "
                         "on this system. Please go back and use manual "
                         "partitioning to set up %1." )
-                    .arg( *Calamares::Branding::ShortProductName ) );
+                    .arg( Calamares::Branding::instance()->shortProductName() ) );
         updateNextEnabled();
     }
     else if ( efiSystemPartitions.count() == 1 ) //probably most usual situation
@@ -1138,7 +1144,7 @@ ChoicePage::setupEfiSystemPartitionSelector()
                     tr( "The EFI system partition at %1 will be used for "
                         "starting %2." )
                     .arg( efiSystemPartitions.first()->partitionPath() )
-                    .arg( *Calamares::Branding::ShortProductName ) );
+                    .arg( Calamares::Branding::instance()->shortProductName() ) );
     }
     else
     {
@@ -1187,7 +1193,7 @@ force_uncheck(QButtonGroup* grp, PrettyRadioButton* button)
 {
     button->hide();
     grp->setExclusive( false );
-    button->buttonWidget()->setChecked( false );
+    button->setChecked( false );
     grp->setExclusive( true );
 }
 
@@ -1272,18 +1278,18 @@ ChoicePage::setupActions()
 
             m_alongsideButton->setText( tr( "<strong>Install alongside</strong><br/>"
                                             "The installer will shrink a partition to make room for %1." )
-                                        .arg( *Calamares::Branding::ShortVersionedName ) );
+                                        .arg( Calamares::Branding::instance()->shortVersionedName() ) );
 
             m_replaceButton->setText( tr( "<strong>Replace a partition</strong><br/>"
                                           "Replaces a partition with %1." )
-                                      .arg( *Calamares::Branding::ShortVersionedName ) );
+                                      .arg( Calamares::Branding::instance()->shortVersionedName() ) );
         )
 
         m_replaceButton->hide();
         m_alongsideButton->hide();
         m_grp->setExclusive( false );
-        m_replaceButton->buttonWidget()->setChecked( false );
-        m_alongsideButton->buttonWidget()->setChecked( false );
+        m_replaceButton->setChecked( false );
+        m_alongsideButton->setChecked( false );
         m_grp->setExclusive( true );
     }
     else if ( osproberEntriesForCurrentDevice.count() == 1 )
@@ -1302,7 +1308,7 @@ ChoicePage::setupActions()
 
                 m_alongsideButton->setText( tr( "<strong>Install alongside</strong><br/>"
                                                 "The installer will shrink a partition to make room for %1." )
-                                            .arg( *Calamares::Branding::ShortVersionedName ) );
+                                            .arg( Calamares::Branding::instance()->shortVersionedName() ) );
 
                 m_eraseButton->setText( tr( "<strong>Erase disk</strong><br/>"
                                             "This will <font color=\"red\">delete</font> all data "
@@ -1311,7 +1317,7 @@ ChoicePage::setupActions()
 
                 m_replaceButton->setText( tr( "<strong>Replace a partition</strong><br/>"
                                               "Replaces a partition with %1." )
-                                          .arg( *Calamares::Branding::ShortVersionedName ) );
+                                          .arg( Calamares::Branding::instance()->shortVersionedName() ) );
             )
         }
         else
@@ -1325,7 +1331,7 @@ ChoicePage::setupActions()
 
                 m_alongsideButton->setText( tr( "<strong>Install alongside</strong><br/>"
                                                 "The installer will shrink a partition to make room for %1." )
-                                            .arg( *Calamares::Branding::ShortVersionedName ) );
+                                            .arg( Calamares::Branding::instance()->shortVersionedName() ) );
 
                 m_eraseButton->setText( tr( "<strong>Erase disk</strong><br/>"
                                             "This will <font color=\"red\">delete</font> all data "
@@ -1333,7 +1339,7 @@ ChoicePage::setupActions()
 
                 m_replaceButton->setText( tr( "<strong>Replace a partition</strong><br/>"
                                               "Replaces a partition with %1." )
-                                          .arg( *Calamares::Branding::ShortVersionedName ) );
+                                          .arg( Calamares::Branding::instance()->shortVersionedName() ) );
             )
         }
     }
@@ -1351,7 +1357,7 @@ ChoicePage::setupActions()
 
             m_alongsideButton->setText( tr( "<strong>Install alongside</strong><br/>"
                                             "The installer will shrink a partition to make room for %1." )
-                                        .arg( *Calamares::Branding::ShortVersionedName ) );
+                                        .arg( Calamares::Branding::instance()->shortVersionedName() ) );
 
             m_eraseButton->setText( tr( "<strong>Erase disk</strong><br/>"
                                         "This will <font color=\"red\">delete</font> all data "
@@ -1359,7 +1365,7 @@ ChoicePage::setupActions()
 
             m_replaceButton->setText( tr( "<strong>Replace a partition</strong><br/>"
                                           "Replaces a partition with %1." )
-                                      .arg( *Calamares::Branding::ShortVersionedName ) );
+                                      .arg( Calamares::Branding::instance()->shortVersionedName() ) );
         )
     }
 
@@ -1470,7 +1476,7 @@ ChoicePage::updateNextEnabled()
 
     if ( m_choice != Manual &&
          m_encryptWidget->isVisible() &&
-         m_encryptWidget->state() == EncryptWidget::EncryptionUnconfirmed )
+         m_encryptWidget->state() == EncryptWidget::Encryption::Unconfirmed )
         enabled = false;
 
     if ( enabled == m_nextEnabled )

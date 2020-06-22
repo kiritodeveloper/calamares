@@ -20,7 +20,7 @@
 #ifndef FORMATPARTITIONJOB_H
 #define FORMATPARTITIONJOB_H
 
-#include <jobs/PartitionJob.h>
+#include "PartitionJob.h"
 
 class Device;
 class Partition;
@@ -42,10 +42,7 @@ public:
     QString prettyStatusMessage() const override;
     Calamares::JobResult exec() override;
 
-    Device* device() const
-    {
-        return m_device;
-    }
+    Device* device() const { return m_device; }
 
 private:
     Device* m_device;

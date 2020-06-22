@@ -1,12 +1,12 @@
 /* === This file is part of Calamares - <https://github.com/calamares> ===
  *
- *   Copyright 2013-2016, Teo Mrnjavac <teo@kde.org>
- *   Copyright 2018, Adriaan de Groot <groot@kde.org>
+ *   SPDX-FileCopyrightText: 2013-2016 Teo Mrnjavac <teo@kde.org>
+ *   SPDX-FileCopyrightText: 2018 Adriaan de Groot <groot@kde.org>
  *
  *   Originally from Tomahawk, portions:
- *   Copyright 2010-2011, Christian Muehlhaeuser <muesli@tomahawk-player.org>
- *   Copyright 2010-2011, Leo Franchi <lfranchi@kde.org>
- *   Copyright 2010-2012, Jeff Mitchell <jeff@tomahawk-player.org>
+ *   SPDX-FileCopyrightText: 2010-2011 Christian Muehlhaeuser <muesli@tomahawk-player.org>
+ *   SPDX-FileCopyrightText: 2010-2011 Leo Franchi <lfranchi@kde.org>
+ *   SPDX-FileCopyrightText: 2010-2012 Jeff Mitchell <jeff@tomahawk-player.org>
  *
  *   Calamares is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -20,6 +20,10 @@
  *
  *   You should have received a copy of the GNU General Public License
  *   along with Calamares. If not, see <http://www.gnu.org/licenses/>.
+ *
+ *   SPDX-License-Identifier: GPL-3.0-or-later
+ *   License-Filename: LICENSE
+ *
  */
 
 #include "Variant.h"
@@ -61,17 +65,41 @@ getString( const QVariantMap& map, const QString& key )
     return QString();
 }
 
-int
-getInteger( const QVariantMap& map, const QString& key, int d )
+QStringList
+getStringList( const QVariantMap& map, const QString& key )
 {
-    int result = d;
     if ( map.contains( key ) )
     {
         auto v = map.value( key );
-        if ( v.type() == QVariant::Int )
+        if ( v.type() == QVariant::StringList )
         {
-            result = v.toInt();
+            return v.toStringList();
         }
+    }
+    return QStringList();
+}
+
+qint64
+getInteger( const QVariantMap& map, const QString& key, qint64 d )
+{
+    qint64 result = d;
+    if ( map.contains( key ) )
+    {
+        auto v = map.value( key );
+        result = v.toString().toLongLong(nullptr, 0);
+    }
+
+    return result;
+}
+
+quint64
+getUnsignedInteger( const QVariantMap& map, const QString& key, quint64 u )
+{
+    quint64 result = u;
+    if ( map.contains( key ) )
+    {
+        auto v = map.value( key );
+        result = v.toString().toULongLong(nullptr, 0);
     }
 
     return result;

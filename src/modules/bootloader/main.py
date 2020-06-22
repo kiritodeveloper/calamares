@@ -57,7 +57,6 @@ def get_uuid():
 
     :return:
     """
-    root_mount_point = libcalamares.globalstorage.value("rootMountPoint")
     partitions = libcalamares.globalstorage.value("partitions")
 
     for partition in partitions:
@@ -117,6 +116,7 @@ def create_systemd_boot_conf(install_path, efi_dir, uuid, entry, entry_name, ker
 
     partitions = libcalamares.globalstorage.value("partitions")
     swap_uuid = ""
+    swap_outer_mappername = None
 
     cryptdevice_params = []
 
@@ -124,9 +124,14 @@ def create_systemd_boot_conf(install_path, efi_dir, uuid, entry, entry_name, ker
     #  - unencrypted swap partition sets swap_uuid
     #  - encrypted root sets cryptdevice_params
     for partition in partitions:
+        if partition["fs"] == "linuxswap" and not partition.get("claimed", None):
+            continue
         has_luks = "luksMapperName" in partition
         if partition["fs"] == "linuxswap" and not has_luks:
             swap_uuid = partition["uuid"]
+
+        if (partition["fs"] == "linuxswap" and has_luks):
+            swap_outer_mappername = partition["luksMapperName"]
 
         if partition["mountPoint"] == "/" and has_luks:
             cryptdevice_params = ["cryptdevice=UUID="
@@ -134,8 +139,6 @@ def create_systemd_boot_conf(install_path, efi_dir, uuid, entry, entry_name, ker
                                   + ":"
                                   + partition["luksMapperName"],
                                   "root=/dev/mapper/"
-                                  + partition["luksMapperName"],
-                                  "resume=/dev/mapper/"
                                   + partition["luksMapperName"]]
 
     if cryptdevice_params:
@@ -145,6 +148,10 @@ def create_systemd_boot_conf(install_path, efi_dir, uuid, entry, entry_name, ker
 
     if swap_uuid:
         kernel_params.append("resume=UUID={!s}".format(swap_uuid))
+
+    if swap_outer_mappername:
+        kernel_params.append("resume=/dev/mapper/{!s}".format(
+            swap_outer_mappername))
 
     kernel_line = get_kernel_line(kernel_type)
     libcalamares.utils.debug("Configure: \"{!s}\"".format(kernel_line))
@@ -227,6 +234,25 @@ def efi_word_size():
         # exposed to the userspace so we assume a 64 bit UEFI here
         efi_bitness = "64"
     return efi_bitness
+
+
+def efi_boot_next():
+    """
+    Tell EFI to definitely boot into the just-installed
+    system next time.
+    """
+    boot_mgr = libcalamares.job.configuration["efiBootMgr"]
+    boot_entry = None
+    efi_bootvars = subprocess.check_output([boot_mgr], text=True)
+    for line in efi_bootvars.split('\n'):
+        if not line:
+            continue
+        words = line.split()
+        if len(words) >= 2 and words[0] == "BootOrder:":
+            boot_entry = words[1].split(',')[0]
+            break
+    if boot_entry:
+        subprocess.call([boot_mgr, "-n", boot_entry])
 
 
 def install_systemd_boot(efi_directory):
@@ -394,6 +420,8 @@ def install_secureboot(efi_directory):
         "-d", efi_disk,
         "-p", efi_partition_number,
         "-l", install_efi_directory + "/" + install_efi_bin])
+
+    efi_boot_next()
 
     # The input file /etc/default/grub should already be filled out by the
     # grubcfg job module.

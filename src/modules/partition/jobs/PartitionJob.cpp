@@ -16,17 +16,23 @@
  *   along with Calamares. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <jobs/PartitionJob.h>
+#include "PartitionJob.h"
 
 PartitionJob::PartitionJob( Partition* partition )
     : m_partition( partition )
-{}
+{
+}
 
-void PartitionJob::iprogress(int percent)
+void
+PartitionJob::iprogress( int percent )
 {
     if ( percent < 0 )
+    {
         percent = 0;
+    }
     if ( percent > 100 )
+    {
         percent = 100;
+    }
     emit progress( qreal( percent / 100.0 ) );
 }

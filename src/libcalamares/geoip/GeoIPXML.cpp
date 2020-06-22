@@ -1,6 +1,6 @@
-/* === This file is part of Calamares - <http://github.com/calamares> ===
- *
- *   Copyright 2018, Adriaan de Groot <groot@kde.org>
+/* === This file is part of Calamares - <https://github.com/calamares> ===
+ * 
+ *   SPDX-FileCopyrightText: 2018 Adriaan de Groot <groot@kde.org>
  *
  *   Calamares is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -14,13 +14,16 @@
  *
  *   You should have received a copy of the GNU General Public License
  *   along with Calamares. If not, see <http://www.gnu.org/licenses/>.
+ *
+ *   SPDX-License-Identifier: GPL-3.0-or-later
+ *   License-Filename: LICENSE
+ *
  */
 
 #include "GeoIPXML.h"
 
 #include "utils/Logger.h"
 
-#include <QNetworkReply>
 #include <QtXml/QDomDocument>
 
 namespace CalamaresUtils
@@ -48,10 +51,12 @@ getElementTexts( const QByteArray& data, const QString& tag )
         cDebug() << "GeoIP found" << tzElements.length() << "elements";
         for ( int it = 0; it < tzElements.length(); ++it )
         {
-            auto e = tzElements.at(it).toElement();
+            auto e = tzElements.at( it ).toElement();
             auto e_text = e.text();
             if ( !e_text.isEmpty() )
+            {
                 elements.append( e_text );
+            }
         }
     }
     else
@@ -60,7 +65,9 @@ getElementTexts( const QByteArray& data, const QString& tag )
     }
 
     if ( elements.count() < 1 )
+    {
         cWarning() << "GeopIP XML had no non-empty elements" << tag;
+    }
 
     return elements;
 }
@@ -70,8 +77,12 @@ QString
 GeoIPXML::rawReply( const QByteArray& data )
 {
     for ( const auto& e : getElementTexts( data, m_element ) )
+    {
         if ( !e.isEmpty() )
+        {
             return e;
+        }
+    }
 
     return QString();
 }
@@ -83,11 +94,13 @@ GeoIPXML::processReply( const QByteArray& data )
     {
         auto tz = splitTZString( e );
         if ( !tz.first.isEmpty() )
+        {
             return tz;
+        }
     }
 
     return RegionZonePair();
 }
 
-}
-}  // namespace
+}  // namespace GeoIP
+}  // namespace CalamaresUtils

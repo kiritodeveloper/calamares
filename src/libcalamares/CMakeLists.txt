@@ -1,12 +1,29 @@
+# === This file is part of Calamares - <https://github.com/calamares> ===
+#
+#   SPDX-FileCopyrightText: 2020 Adriaan de Groot <groot@kde.org>
+#
+#   Calamares is free software: you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as published by
+#   the Free Software Foundation, either version 3 of the License, or
+#   (at your option) any later version.
+#
+#   Calamares is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with Calamares. If not, see <http://www.gnu.org/licenses/>.
+#
+#   SPDX-License-Identifier: GPL-3.0-or-later
+#   License-Filename: LICENSE
+#
+#
 # libcalamares is the non-GUI part of Calamares, which includes handling
 # translations, configurations, logging, utilities, global storage, and (non-GUI) jobs.
 
-add_definitions(
-    ${QT_DEFINITIONS}
-    -DQT_SHARED
-    -DQT_SHAREDPOINTER_TRACK_POINTERS
-    -DDLLEXPORT_PRO
-)
+add_definitions( -DDLLEXPORT_PRO )
+include_directories( ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR} )
 
 configure_file( ${CMAKE_CURRENT_SOURCE_DIR}/CalamaresConfig.h.in
                 ${CMAKE_CURRENT_BINARY_DIR}/CalamaresConfig.h )
@@ -27,6 +44,7 @@ set( libSources
 
     # GeoIP services
     geoip/Interface.cpp
+    geoip/GeoIPFixed.cpp
     geoip/GeoIPJSON.cpp
     geoip/Handler.cpp
 
@@ -34,15 +52,29 @@ set( libSources
     locale/Label.cpp
     locale/LabelModel.cpp
     locale/Lookup.cpp
+    locale/TimeZone.cpp
     locale/TranslatableConfiguration.cpp
 
+    # Modules
+    modulesystem/InstanceKey.cpp
+    modulesystem/Module.cpp
+    modulesystem/Requirement.cpp
+    modulesystem/RequirementsChecker.cpp
+    modulesystem/RequirementsModel.cpp
+
+    # Network service
+    network/Manager.cpp
+
     # Partition service
+    partition/Mount.cpp
     partition/PartitionSize.cpp
+    partition/Sync.cpp
 
     # Utility service
     utils/CalamaresUtilsSystem.cpp
     utils/CommandList.cpp
     utils/Dirs.cpp
+    utils/Entropy.cpp
     utils/Logger.cpp
     utils/PluginFactory.cpp
     utils/Retranslator.cpp
@@ -50,19 +82,6 @@ set( libSources
     utils/UMask.cpp
     utils/Variant.cpp
     utils/Yaml.cpp
-)
-set( kdsagSources
-    kdsingleapplicationguard/kdsingleapplicationguard.cpp
-    kdsingleapplicationguard/kdsharedmemorylocker.cpp
-    kdsingleapplicationguard/kdtoolsglobal.cpp
-    kdsingleapplicationguard/kdlockedsharedmemorypointer.cpp
-)
-mark_thirdparty_code( ${kdsagSources} )
-
-include_directories(
-    ${CMAKE_CURRENT_BINARY_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${YAMLCPP_INCLUDE_DIR}
 )
 
 ### OPTIONAL Python support
@@ -99,28 +118,70 @@ if( Qt5Xml_FOUND )
     list( APPEND OPTIONAL_PUBLIC_LIBRARIES Qt5::Network Qt5::Xml )
 endif()
 
+### OPTIONAL KPMcore support
+#
+#
+find_package( KPMcore 3.3 )
+set_package_properties(
+    KPMcore PROPERTIES
+    URL "https://invent.kde.org/kde/kpmcore"
+    DESCRIPTION "KDE Partitioning library"
+    TYPE RECOMMENDED
+    PURPOSE "For partitioning service"
+)
+
+if ( KPMcore_FOUND )
+    find_package( Qt5 REQUIRED DBus )  # Needed for KPMCore
+    find_package( KF5 REQUIRED I18n WidgetsAddons )  # Needed for KPMCore
+
+    if( KPMcore_VERSION VERSION_GREATER_EQUAL "4.2" )
+        add_definitions(
+            -DWITH_KPMCORE42API
+            -DWITH_KPMCORE4API
+        ) # kpmcore 4.2 with new API
+    elseif( KPMcore_VERSION VERSION_GREATER_EQUAL "4.0" )
+        add_definitions( -DWITH_KPMCORE4API ) # kpmcore 4 with new API
+    elseif( KPMcore_VERSION VERSION_GREATER "3.3.70" )
+        message( FATAL_ERROR "KPMCore beta versions ${KPMcore_VERSION} not supported" )
+    endif()
+
+    include_directories( ${KPMCORE_INCLUDE_DIR} )
+    list( APPEND libSources
+        partition/FileSystem.cpp
+        partition/KPMManager.cpp
+        partition/PartitionIterator.cpp
+        partition/PartitionQuery.cpp
+    )
+    list( APPEND OPTIONAL_PRIVATE_LIBRARIES kpmcore )
+endif()
+
 ### LIBRARY
 #
 #
-add_library( calamares SHARED ${libSources} ${kdsagSources} )
+add_library( calamares SHARED ${libSources} )
 set_target_properties( calamares
     PROPERTIES
         VERSION ${CALAMARES_VERSION_SHORT}
         SOVERSION ${CALAMARES_VERSION_SHORT}
+        INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_INSTALL_FULL_INCLUDEDIR}/libcalamares
 )
 calamares_automoc( calamares )
 
 target_link_libraries( calamares
     LINK_PRIVATE
         ${OPTIONAL_PRIVATE_LIBRARIES}
+        yamlcpp
     LINK_PUBLIC
-        ${YAMLCPP_LIBRARY}
         Qt5::Core
+        KF5::CoreAddons
         ${OPTIONAL_PUBLIC_LIBRARIES}
 )
 
+### Installation
+#
+#
 install( TARGETS calamares
-    EXPORT CalamaresLibraryDepends
+    EXPORT Calamares
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -135,64 +196,77 @@ install( CODE "
 
 # Install header files
 file( GLOB rootHeaders "*.h" )
-file( GLOB kdsingleapplicationguardHeaders "kdsingleapplicationguard/*.h" )
-file( GLOB utilsHeaders "utils/*.h" )
+install(
+    FILES
+        ${CMAKE_CURRENT_BINARY_DIR}/CalamaresConfig.h
+        ${rootHeaders}
+    DESTINATION include/libcalamares
+)
+# Install each subdir-worth of header files
+foreach( subdir geoip locale modulesystem network partition utils )
+    file( GLOB subdir_headers "${subdir}/*.h" )
+    install( FILES ${subdir_headers} DESTINATION include/libcalamares/${subdir} )
+endforeach()
 
-install( FILES ${CMAKE_CURRENT_BINARY_DIR}/CalamaresConfig.h DESTINATION include/libcalamares )
-install( FILES ${rootHeaders}                       DESTINATION include/libcalamares )
-install( FILES ${kdsingleapplicationguardHeaders}   DESTINATION include/libcalamares/kdsingleapplicationguard )
-install( FILES ${utilsHeaders}                      DESTINATION include/libcalamares/utils )
 
 ### TESTING
 #
 #
-if ( ECM_FOUND AND BUILD_TESTING )
-    ecm_add_test(
-            utils/Tests.cpp
-        TEST_NAME
-            libcalamarestest
-        LINK_LIBRARIES
-            calamares
-            Qt5::Core
-            Qt5::Test
-    )
-    calamares_automoc( libcalamarestest )
+calamares_add_test(
+    libcalamarestest
+    SOURCES
+        utils/Tests.cpp
+)
 
-    ecm_add_test(
-            geoip/GeoIPTests.cpp
-            ${geoip_src}
-        TEST_NAME
-            geoiptest
-        LINK_LIBRARIES
-            calamares
-            Qt5::Test
-            ${YAMLCPP_LIBRARY}
-    )
-    calamares_automoc( geoiptest )
+calamares_add_test(
+    libcalamarestestpaths
+    SOURCES
+        utils/TestPaths.cpp
+)
 
-    ecm_add_test(
-            partition/Tests.cpp
-        TEST_NAME
-            libcalamarespartitiontest
-        LINK_LIBRARIES
-            calamares
-            Qt5::Test
-    )
-    calamares_automoc( libcalamarespartitiontest )
+calamares_add_test(
+    geoiptest
+    SOURCES
+        geoip/GeoIPTests.cpp
+        ${geoip_src}
+)
 
-    ecm_add_test(
-            locale/Tests.cpp
-        TEST_NAME
-            libcalamareslocaletest
-        LINK_LIBRARIES
-            calamares
-            Qt5::Test
+calamares_add_test(
+    libcalamarespartitiontest
+    SOURCES
+        partition/Tests.cpp
+)
+
+if( KPMcore_FOUND )
+    calamares_add_test(
+        libcalamarespartitionkpmtest
+        SOURCES
+            partition/KPMTests.cpp
+        LIBRARIES
+            ${OPTIONAL_PRIVATE_LIBRARIES}
     )
-    calamares_automoc( libcalamareslocaletest )
 endif()
 
-if( BUILD_TESTING )
-    add_executable( test_geoip geoip/test_geoip.cpp ${geoip_src} )
-    target_link_libraries( test_geoip calamares Qt5::Network ${YAMLCPP_LIBRARY} )
-    calamares_automoc( test_geoip )
-endif()
+calamares_add_test(
+    libcalamareslocaletest
+    SOURCES
+        locale/Tests.cpp
+)
+
+calamares_add_test(
+    libcalamaresnetworktest
+    SOURCES
+        network/Tests.cpp
+)
+
+calamares_add_test(
+    libcalamaresmodulesystemtest
+    SOURCES
+        modulesystem/Tests.cpp
+)
+
+# This is not an actual test, it's a test / demo application
+# for experimenting with GeoIP.
+add_executable( test_geoip geoip/test_geoip.cpp ${geoip_src} )
+target_link_libraries( test_geoip calamares Qt5::Network yamlcpp )
+calamares_automoc( test_geoip )

@@ -18,12 +18,16 @@
 
 #include "TrackingJobs.h"
 
+#include "Config.h"
+
+#include "GlobalStorage.h"
+#include "JobQueue.h"
+#include "network/Manager.h"
 #include "utils/CalamaresUtilsSystem.h"
 #include "utils/Logger.h"
 
-#include <QEventLoop>
-#include <QNetworkAccessManager>
-#include <QNetworkReply>
+#include <KMacroExpander>
+
 #include <QSemaphore>
 #include <QTimer>
 
@@ -31,14 +35,10 @@
 
 TrackingInstallJob::TrackingInstallJob( const QString& url )
     : m_url( url )
-    , m_networkManager( nullptr )
 {
 }
 
-TrackingInstallJob::~TrackingInstallJob()
-{
-    delete m_networkManager;
-}
+TrackingInstallJob::~TrackingInstallJob() {}
 
 QString
 TrackingInstallJob::prettyName() const
@@ -61,80 +61,89 @@ TrackingInstallJob::prettyStatusMessage() const
 Calamares::JobResult
 TrackingInstallJob::exec()
 {
-    m_networkManager = new QNetworkAccessManager();
+    using CalamaresUtils::Network::Manager;
+    using CalamaresUtils::Network::RequestOptions;
+    using CalamaresUtils::Network::RequestStatus;
 
-    QNetworkRequest request;
-    request.setUrl( QUrl( m_url ) );
-    // Follows all redirects except unsafe ones (https to http).
-    request.setAttribute( QNetworkRequest::FollowRedirectsAttribute, true );
-    // Not everybody likes the default User Agent used by this class (looking at you,
-    // sourceforge.net), so let's set a more descriptive one.
-    request.setRawHeader( "User-Agent", "Mozilla/5.0 (compatible; Calamares)" );
-
-    QTimer timeout;
-    timeout.setSingleShot( true );
-
-    QEventLoop loop;
-
-    connect( m_networkManager, &QNetworkAccessManager::finished, this, &TrackingInstallJob::dataIsHere );
-    connect( m_networkManager, &QNetworkAccessManager::finished, &loop, &QEventLoop::quit );
-    connect( &timeout, &QTimer::timeout, &loop, &QEventLoop::quit );
-
-    m_networkManager->get( request );  // The semaphore is released when data is received
-    timeout.start( std::chrono::milliseconds( 5000 ) );
-
-    loop.exec();
-
-    if ( !timeout.isActive() )
+    auto result = Manager::instance().synchronousPing(
+        QUrl( m_url ),
+        RequestOptions( RequestOptions::FollowRedirect | RequestOptions::FakeUserAgent,
+                        RequestOptions::milliseconds( 5000 ) ) );
+    if ( result.status == RequestStatus::Timeout )
     {
         cWarning() << "install-tracking request timed out.";
         return Calamares::JobResult::error( tr( "Internal error in install-tracking." ),
                                             tr( "HTTP request timed out." ) );
     }
-    timeout.stop();
-
     return Calamares::JobResult::ok();
 }
 
 void
-TrackingInstallJob::dataIsHere( QNetworkReply* reply )
+TrackingInstallJob::addJob( Calamares::JobList& list, InstallTrackingConfig* config )
 {
-    cDebug() << "Installation feedback request OK";
-    reply->deleteLater();
+    if ( config->isEnabled() )
+    {
+        const auto* s = CalamaresUtils::System::instance();
+        QHash< QString, QString > map { std::initializer_list< std::pair< QString, QString > > {
+            { QStringLiteral( "CPU" ), s->getCpuDescription() },
+            { QStringLiteral( "MEMORY" ), QString::number( s->getTotalMemoryB().first ) },
+            { QStringLiteral( "DISK" ), QString::number( s->getTotalDiskB() ) } } };
+        QString installUrl = KMacroExpander::expandMacros( config->installTrackingUrl(), map );
+
+        cDebug() << Logger::SubEntry << "install-tracking URL" << installUrl;
+
+        list.append( Calamares::job_ptr( new TrackingInstallJob( installUrl ) ) );
+    }
 }
 
+void
+TrackingMachineJob::addJob( Calamares::JobList& list, MachineTrackingConfig* config )
+{
+    if ( config->isEnabled() )
+    {
+        const auto style = config->machineTrackingStyle();
+        if ( style == "updatemanager" )
+        {
+            list.append( Calamares::job_ptr( new TrackingMachineUpdateManagerJob() ) );
+        }
+        else
+        {
+            cWarning() << "Unsupported machine tracking style" << style;
+        }
+    }
+}
+
+
 QString
-TrackingMachineNeonJob::prettyName() const
+TrackingMachineUpdateManagerJob::prettyName() const
 {
     return tr( "Machine feedback" );
 }
 
 QString
-TrackingMachineNeonJob::prettyDescription() const
+TrackingMachineUpdateManagerJob::prettyDescription() const
 {
     return prettyName();
 }
 
 QString
-TrackingMachineNeonJob::prettyStatusMessage() const
+TrackingMachineUpdateManagerJob::prettyStatusMessage() const
 {
     return tr( "Configuring machine feedback." );
 }
 
 Calamares::JobResult
-TrackingMachineNeonJob::exec()
+TrackingMachineUpdateManagerJob::exec()
 {
     static const auto script = QStringLiteral(
-        R"x(
-MACHINE_ID=`cat /etc/machine-id`
-sed -i "s,URI =.*,URI = http://releases.neon.kde.org/meta-release/${MACHINE_ID}," /etc/update-manager/meta-release
-sed -i "s,URI_LTS =.*,URI_LTS = http://releases.neon.kde.org/meta-release-lts/${MACHINE_ID}," /etc/update-manager/meta-release
-true
-)x" );
-    int r = CalamaresUtils::System::instance()->targetEnvCall( "/bin/sh",
+        "sed -i '/^URI/s,${MACHINE_ID},'`cat /etc/machine-id`',' /etc/update-manager/meta-release || true" );
+
+    auto res = CalamaresUtils::System::instance()->runCommand( CalamaresUtils::System::RunLocation::RunInTarget,
+                                                               QStringList { QStringLiteral( "/bin/sh" ) },
                                                                QString(),  // Working dir
-                                                               script,
+                                                               script,  // standard input
                                                                std::chrono::seconds( 1 ) );
+    int r = res.first;
 
     if ( r == 0 )
     {
@@ -152,4 +161,88 @@ true
             tr( "Error in machine feedback configuration." ),
             tr( "Could not configure machine feedback correctly, Calamares error %1." ).arg( r ) );
     }
+}
+
+void
+TrackingUserJob::addJob( Calamares::JobList& list, UserTrackingConfig* config )
+{
+    if ( config->isEnabled() )
+    {
+        const auto* gs = Calamares::JobQueue::instance()->globalStorage();
+        static const auto key = QStringLiteral( "username" );
+        QString username = ( gs && gs->contains( key ) ) ? gs->value( key ).toString() : QString();
+
+        if ( username.isEmpty() )
+        {
+            cWarning() << "No username is set in GlobalStorage, skipping user-tracking.";
+            return;
+        }
+
+        const auto style = config->userTrackingStyle();
+        if ( style == "kuserfeedback" )
+        {
+            list.append( Calamares::job_ptr( new TrackingKUserFeedbackJob( username, config->userTrackingAreas() ) ) );
+        }
+        else
+        {
+            cWarning() << "Unsupported user tracking style" << style;
+        }
+    }
+}
+
+TrackingKUserFeedbackJob::TrackingKUserFeedbackJob( const QString& username, const QStringList& areas )
+    : m_username( username )
+    , m_areas( areas )
+{
+}
+
+QString
+TrackingKUserFeedbackJob::prettyName() const
+{
+    return tr( "KDE user feedback" );
+}
+
+QString
+TrackingKUserFeedbackJob::prettyDescription() const
+{
+    return prettyName();
+}
+
+QString
+TrackingKUserFeedbackJob::prettyStatusMessage() const
+{
+    return tr( "Configuring KDE user feedback." );
+}
+
+Calamares::JobResult
+TrackingKUserFeedbackJob::exec()
+{
+    // This is the contents of a config file to turn on some kind
+    // of KUserFeedback tracking; the level (16) is chosen for minimal
+    // but not zero tracking.
+    static const char config[] = R"x([Global]
+FeedbackLevel=16
+)x";
+
+    for ( const QString& area : m_areas )
+    {
+        QString path = QStringLiteral( "/home/%1/.config/%2" ).arg( m_username, area );
+        cDebug() << "Configuring KUserFeedback" << path;
+
+        int r = CalamaresUtils::System::instance()->createTargetFile( path, config );
+        if ( r > 0 )
+        {
+            return Calamares::JobResult::error(
+                tr( "Error in KDE user feedback configuration." ),
+                tr( "Could not configure KDE user feedback correctly, script error %1." ).arg( r ) );
+        }
+        else if ( r < 0 )
+        {
+            return Calamares::JobResult::error(
+                tr( "Error in KDE user feedback configuration." ),
+                tr( "Could not configure KDE user feedback correctly, Calamares error %1." ).arg( r ) );
+        }
+    }
+
+    return Calamares::JobResult::ok();
 }

@@ -1,9 +1,9 @@
 /* === This file is part of Calamares - <https://github.com/calamares> ===
- *
- *   Copyright 2019, Dominic Hayes <ferenosdev@outlook.com>
- *   Copyright 2019, Gabriel Craciunescu <crazy@frugalware.org>
- *   Copyright 2014-2015, Teo Mrnjavac <teo@kde.org>
- *   Copyright 2017-2018, Adriaan de Groot <groot@kde.org>
+ * 
+ *   SPDX-FileCopyrightText: 2014-2015 Teo Mrnjavac <teo@kde.org>
+ *   SPDX-FileCopyrightText: 2019 Gabriel Craciunescu <crazy@frugalware.org>
+ *   SPDX-FileCopyrightText: 2019 Dominic Hayes <ferenosdev@outlook.com>
+ *   SPDX-FileCopyrightText: 2017-2018 Adriaan de Groot <groot@kde.org>
  *
  *   Calamares is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -17,6 +17,10 @@
  *
  *   You should have received a copy of the GNU General Public License
  *   along with Calamares. If not, see <http://www.gnu.org/licenses/>.
+ *
+ *   SPDX-License-Identifier: GPL-3.0-or-later
+ *   License-Filename: LICENSE
+ *
  */
 
 #ifndef SETTINGS_H
@@ -32,30 +36,63 @@
 namespace Calamares
 {
 
+struct DLLEXPORT InstanceDescription
+{
+    InstanceDescription( const QVariantMap& );
+
+    QString module;  ///< Module name (e.g. "welcome")
+    QString id;  ///< Id, to distinguish multiple instances (e.g. "one", for "welcome@one")
+    QString config;  ///< Config-file name (for multiple instances)
+    int weight;
+};
+
 class DLLEXPORT Settings : public QObject
 {
     Q_OBJECT
-public:
-    explicit Settings( const QString& settingsFilePath, bool debugMode, QObject* parent = nullptr );
+    explicit Settings( const QString& settingsFilePath, bool debugMode );
 
+public:
     static Settings* instance();
+    /// @brief Find a settings.conf, following @p debugMode
+    static Settings* init( bool debugMode );
+    /// @brief Explicif filename, debug is always true (for testing)
+    static Settings* init( const QString& filename );
 
     QStringList modulesSearchPaths() const;
 
-    using InstanceDescription = QMap< QString, QString >;
     using InstanceDescriptionList = QList< InstanceDescription >;
     InstanceDescriptionList customModuleInstances() const;
 
-    using ModuleSequence = QList< QPair< ModuleAction, QStringList > >;
+    using ModuleSequence = QList< QPair< ModuleSystem::Action, QStringList > >;
     ModuleSequence modulesSequence() const;
 
     QString brandingComponentName() const;
 
-    bool showPromptBeforeExecution() const;
+    /** @brief Is this a debugging run?
+     *
+     * Returns true if Calamares is in debug mode. In debug mode,
+     * modules and settings are loaded from more locations, to help
+     * development and debugging.
+     */
+    bool debugMode() const { return m_debug; }
 
-    bool debugMode() const;
+    /** @brief Distinguish "install" from "OEM" modes.
+     *
+     * Returns true in "install" mode, which is where actions happen
+     * in a chroot -- the target system, which exists separately from
+     * the source system. In "OEM" mode, returns false and most actions
+     * apply to the *current* (host) system.
+     */
+    bool doChroot() const { return m_doChroot; }
 
-    bool doChroot() const;
+    /** @brief Global setting of prompt-before-install.
+     *
+     * Returns true when the configuration is such that the user
+     * should be prompted one-last-time before any action is taken
+     * that really affects the machine.
+     */
+    bool showPromptBeforeExecution() const { return m_promptInstall; }
+
     /** @brief Distinguish between "install" and "setup" modes.
      *
      * This influences user-visible strings, for instance using the
@@ -64,9 +101,12 @@ public:
     bool isSetupMode() const { return m_isSetupMode; }
 
     /** @brief Global setting of disable-cancel: can't cancel ever. */
-    bool disableCancel() const;
+    bool disableCancel() const { return m_disableCancel; }
     /** @brief Temporary setting of disable-cancel: can't cancel during exec. */
-    bool disableCancelDuringExec() const;
+    bool disableCancelDuringExec() const { return m_disableCancelDuringExec; }
+
+    /** @brief Is quit-at-end set? (Quit automatically when done) */
+    bool quitAtEnd() const { return m_quitAtEnd; }
 
 private:
     static Settings* s_instance;
@@ -84,6 +124,7 @@ private:
     bool m_promptInstall;
     bool m_disableCancel;
     bool m_disableCancelDuringExec;
+    bool m_quitAtEnd;
 };
 
 }  // namespace Calamares

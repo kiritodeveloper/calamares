@@ -21,7 +21,6 @@
 #include "CalamaresConfig.h"
 #include "CalamaresVersion.h"
 #include "CalamaresWindow.h"
-#include "progresstree/ProgressTreeModel.h"
 #include "progresstree/ProgressTreeView.h"
 
 #include "Branding.h"
@@ -33,19 +32,29 @@
 #include "utils/CalamaresUtilsSystem.h"
 #include "utils/Dirs.h"
 #include "utils/Logger.h"
+#ifdef WITH_QML
+#include "utils/Qml.h"
+#endif
 #include "utils/Retranslator.h"
 #include "viewpages/ViewStep.h"
 
 #include <QDesktopWidget>
 #include <QDir>
 #include <QFileInfo>
+#include <QScreen>
+#include <QTimer>
 
+/// @brief Convenience for "are the settings in debug mode"
+static bool
+isDebug()
+{
+    return Calamares::Settings::instance() && Calamares::Settings::instance()->debugMode();
+}
 
 CalamaresApplication::CalamaresApplication( int& argc, char* argv[] )
     : QApplication( argc, argv )
     , m_mainwindow( nullptr )
     , m_moduleManager( nullptr )
-    , m_debugMode( false )
 {
     // Setting the organization name makes the default cache
     // directory -- where Calamares stores logs, for instance --
@@ -56,8 +65,6 @@ CalamaresApplication::CalamaresApplication( int& argc, char* argv[] )
     setOrganizationDomain( QStringLiteral( CALAMARES_ORGANIZATION_DOMAIN ) );
     setApplicationName( QStringLiteral( CALAMARES_APPLICATION_NAME ) );
     setApplicationVersion( QStringLiteral( CALAMARES_VERSION ) );
-
-    CalamaresUtils::installTranslator( QLocale::system(), QString(), this );
 
     QFont f = font();
     CalamaresUtils::setDefaultFontSize( f.pointSize() );
@@ -71,15 +78,20 @@ CalamaresApplication::init()
     cDebug() << "Calamares version:" << CALAMARES_VERSION;
     cDebug() << "        languages:" << QString( CALAMARES_TRANSLATION_LANGUAGES ).replace( ";", ", " );
 
-    setQuitOnLastWindowClosed( false );
-
+    if ( !Calamares::Settings::instance() )
+    {
+        cError() << "Must create Calamares::Settings before the application.";
+        ::exit( 1 );
+    }
     initQmlPath();
-    initSettings();
     initBranding();
 
+    CalamaresUtils::installTranslator( QLocale::system(), QString() );
+
+    setQuitOnLastWindowClosed( false );
     setWindowIcon( QIcon( Calamares::Branding::instance()->imagePath( Calamares::Branding::ProductIcon ) ) );
 
-    cDebug() << "STARTUP: initQmlPath, initSettings, initBranding done";
+    cDebug() << "STARTUP: initSettings, initQmlPath, initBranding done";
 
     initModuleManager();  //also shows main window
 
@@ -89,8 +101,8 @@ CalamaresApplication::init()
 
 CalamaresApplication::~CalamaresApplication()
 {
-    cDebug( Logger::LOGVERBOSE ) << "Shutting down Calamares...";
-    cDebug( Logger::LOGVERBOSE ) << Logger::SubEntry << "Finished shutdown.";
+    Logger::CDebug( Logger::LOGVERBOSE ) << "Shutting down Calamares...";
+    Logger::CDebug( Logger::LOGVERBOSE ) << Logger::SubEntry << "Finished shutdown.";
 }
 
 
@@ -101,81 +113,10 @@ CalamaresApplication::instance()
 }
 
 
-void
-CalamaresApplication::setDebug( bool enabled )
-{
-    m_debugMode = enabled;
-}
-
-
-bool
-CalamaresApplication::isDebug()
-{
-    return m_debugMode;
-}
-
-
 CalamaresWindow*
 CalamaresApplication::mainWindow()
 {
     return m_mainwindow;
-}
-
-
-static QStringList
-qmlDirCandidates( bool assumeBuilddir )
-{
-    static const char QML[] = "qml";
-
-    QStringList qmlDirs;
-    if ( CalamaresUtils::isAppDataDirOverridden() )
-    {
-        qmlDirs << CalamaresUtils::appDataDir().absoluteFilePath( QML );
-    }
-    else
-    {
-        if ( assumeBuilddir )
-        {
-            qmlDirs << QDir::current().absoluteFilePath( "src/qml" );  // In build-dir
-        }
-        if ( CalamaresUtils::haveExtraDirs() )
-            for ( auto s : CalamaresUtils::extraDataDirs() )
-            {
-                qmlDirs << ( s + QML );
-            }
-        qmlDirs << CalamaresUtils::appDataDir().absoluteFilePath( QML );
-    }
-
-    return qmlDirs;
-}
-
-
-static QStringList
-settingsFileCandidates( bool assumeBuilddir )
-{
-    static const char settings[] = "settings.conf";
-
-    QStringList settingsPaths;
-    if ( CalamaresUtils::isAppDataDirOverridden() )
-    {
-        settingsPaths << CalamaresUtils::appDataDir().absoluteFilePath( settings );
-    }
-    else
-    {
-        if ( assumeBuilddir )
-        {
-            settingsPaths << QDir::current().absoluteFilePath( settings );
-        }
-        if ( CalamaresUtils::haveExtraDirs() )
-            for ( auto s : CalamaresUtils::extraConfigDirs() )
-            {
-                settingsPaths << ( s + settings );
-            }
-        settingsPaths << CMAKE_INSTALL_FULL_SYSCONFDIR "/calamares/settings.conf";  // String concat
-        settingsPaths << CalamaresUtils::appDataDir().absoluteFilePath( settings );
-    }
-
-    return settingsPaths;
 }
 
 
@@ -209,81 +150,12 @@ brandingFileCandidates( bool assumeBuilddir, const QString& brandingFilename )
 void
 CalamaresApplication::initQmlPath()
 {
-    QDir importPath;  // Right now, current-dir
-    QStringList qmlDirCandidatesByPriority = qmlDirCandidates( isDebug() );
-    bool found = false;
-
-    foreach ( const QString& path, qmlDirCandidatesByPriority )
+#ifdef WITH_QML
+    if ( !CalamaresUtils::initQmlModulesDir() )
     {
-        QDir dir( path );
-        if ( dir.exists() && dir.isReadable() )
-        {
-            importPath = dir;
-            found = true;
-            break;
-        }
-    }
-
-    if ( !found || !importPath.exists() || !importPath.isReadable() )
-    {
-        cError() << "Cowardly refusing to continue startup without a QML directory."
-                 << Logger::DebugList( qmlDirCandidatesByPriority );
-        if ( CalamaresUtils::isAppDataDirOverridden() )
-        {
-            cError() << "FATAL: explicitly configured application data directory is missing qml/";
-        }
-        else
-        {
-            cError() << "FATAL: none of the expected QML paths exist.";
-        }
         ::exit( EXIT_FAILURE );
     }
-
-    cDebug() << "Using Calamares QML directory" << importPath.absolutePath();
-    CalamaresUtils::setQmlModulesDir( importPath );
-}
-
-
-void
-CalamaresApplication::initSettings()
-{
-    QStringList settingsFileCandidatesByPriority = settingsFileCandidates( isDebug() );
-
-    QFileInfo settingsFile;
-    bool found = false;
-
-    foreach ( const QString& path, settingsFileCandidatesByPriority )
-    {
-        QFileInfo pathFi( path );
-        if ( pathFi.exists() && pathFi.isReadable() )
-        {
-            settingsFile = pathFi;
-            found = true;
-            break;
-        }
-    }
-
-    if ( !found || !settingsFile.exists() || !settingsFile.isReadable() )
-    {
-        cError() << "Cowardly refusing to continue startup without settings."
-                 << Logger::DebugList( settingsFileCandidatesByPriority );
-        if ( CalamaresUtils::isAppDataDirOverridden() )
-        {
-            cError() << "FATAL: explicitly configured application data directory is missing settings.conf";
-        }
-        else
-        {
-            cError() << "FATAL: none of the expected configuration file paths exist.";
-        }
-        ::exit( EXIT_FAILURE );
-    }
-
-    auto* settings = new Calamares::Settings( settingsFile.absoluteFilePath(), isDebug(), this );  // Creates singleton
-    if ( settings->modulesSequence().count() < 1 )
-    {
-        cError() << "FATAL: no sequence set.";
-        ::exit( EXIT_FAILURE );
-    }
+#endif
 }
 
 
@@ -341,6 +213,42 @@ CalamaresApplication::initModuleManager()
     m_moduleManager->init();
 }
 
+/** @brief centers the widget @p w on (a) screen
+ *
+ * This tries to duplicate the (deprecated) qApp->desktop()->availableGeometry()
+ * placement by iterating over screens and putting Calamares in the first
+ * one where it fits; this is *generally* the primary screen.
+ *
+ * With debugging, it would look something like this (2 screens attached,
+ * primary at +1080+240 because I have a very strange X setup). Before
+ * being mapped, the Calamares window is at +0+0 but does have a size.
+ * The first screen's geometry includes the offset from the origin in
+ * screen coordinates.
+ *
+ *  Proposed window size: 1024 520
+ *  Window QRect(0,0 1024x520)
+ *  Screen QRect(1080,240 2560x1440)
+ *  Moving QPoint(1848,700)
+ *  Screen QRect(0,0 1080x1920)
+ *
+ */
+static void
+centerWindowOnScreen( QWidget* w )
+{
+    QList< QScreen* > screens = qApp->screens();
+    QPoint windowCenter = w->rect().center();
+    QSize windowSize = w->rect().size();
+
+    for ( const auto* screen : screens )
+    {
+        QSize screenSize = screen->availableGeometry().size();
+        if ( ( screenSize.width() >= windowSize.width() ) && ( screenSize.height() >= windowSize.height() ) )
+        {
+            w->move( screen->availableGeometry().center() - windowCenter );
+            break;
+        }
+    }
+}
 
 void
 CalamaresApplication::initView()
@@ -354,10 +262,12 @@ CalamaresApplication::initView()
     connect( m_moduleManager, &Calamares::ModuleManager::modulesLoaded, this, &CalamaresApplication::initViewSteps );
     connect( m_moduleManager, &Calamares::ModuleManager::modulesFailed, this, &CalamaresApplication::initFailed );
 
-    m_moduleManager->loadModules();
+    QTimer::singleShot( 0, m_moduleManager, &Calamares::ModuleManager::loadModules );
 
-    m_mainwindow->move( this->desktop()->availableGeometry().center() - m_mainwindow->rect().center() );
-
+    if ( Calamares::Branding::instance() && Calamares::Branding::instance()->windowPlacementCentered() )
+    {
+        centerWindowOnScreen( m_mainwindow );
+    }
     cDebug() << "STARTUP: CalamaresWindow created; loadModules started";
 }
 
@@ -377,17 +287,9 @@ CalamaresApplication::initViewSteps()
         m_mainwindow->show();
     }
 
-    ProgressTreeModel* m = new ProgressTreeModel( nullptr );
-    ProgressTreeView::instance()->setModel( m );
     cDebug() << "STARTUP: Window now visible and ProgressTreeView populated";
-
-    const auto steps = Calamares::ViewManager::instance()->viewSteps();
-    cDebug() << Logger::SubEntry << steps.count() << "view steps loaded.";
-    // Tell the first view that it's been shown.
-    if ( steps.count() > 0 )
-    {
-        steps[ 0 ]->onActivate();
-    }
+    cDebug() << Logger::SubEntry << Calamares::ViewManager::instance()->viewSteps().count() << "view steps loaded.";
+    Calamares::ViewManager::instance()->onInitComplete();
 }
 
 void

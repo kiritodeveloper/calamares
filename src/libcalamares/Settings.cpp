@@ -1,9 +1,9 @@
 /* === This file is part of Calamares - <https://github.com/calamares> ===
- *
- *   Copyright 2019, Dominic Hayes <ferenosdev@outlook.com>
- *   Copyright 2019, Gabriel Craciunescu <crazy@frugalware.org>
- *   Copyright 2014-2015, Teo Mrnjavac <teo@kde.org>
- *   Copyright 2017-2018, Adriaan de Groot <groot@kde.org>
+ * 
+ *   SPDX-FileCopyrightText: 2014-2015 Teo Mrnjavac <teo@kde.org>
+ *   SPDX-FileCopyrightText: 2019 Gabriel Craciunescu <crazy@frugalware.org>
+ *   SPDX-FileCopyrightText: 2019 Dominic Hayes <ferenosdev@outlook.com>
+ *   SPDX-FileCopyrightText: 2017-2018 Adriaan de Groot <groot@kde.org>
  *
  *   Calamares is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -17,10 +17,15 @@
  *
  *   You should have received a copy of the GNU General Public License
  *   along with Calamares. If not, see <http://www.gnu.org/licenses/>.
+ *
+ *   SPDX-License-Identifier: GPL-3.0-or-later
+ *   License-Filename: LICENSE
+ *
  */
 
 #include "Settings.h"
 
+#include "CalamaresConfig.h"
 #include "utils/Dirs.h"
 #include "utils/Logger.h"
 #include "utils/Yaml.h"
@@ -69,6 +74,24 @@ requireBool( const YAML::Node& config, const char* key, bool d )
 
 namespace Calamares
 {
+
+InstanceDescription::InstanceDescription( const QVariantMap& m )
+    : module( m.value( "module" ).toString() )
+    , id( m.value( "id" ).toString() )
+    , config( m.value( "config" ).toString() )
+    , weight( m.value( "weight" ).toInt() )
+{
+    if ( id.isEmpty() )
+    {
+        id = module;
+    }
+    if ( config.isEmpty() )
+    {
+        config = module + QStringLiteral( ".conf" );
+    }
+
+    weight = qBound( 1, weight, 100 );
+}
 
 Settings* Settings::s_instance = nullptr;
 
@@ -133,17 +156,7 @@ interpretInstances( const YAML::Node& node, Settings::InstanceDescriptionList& c
                 {
                     continue;
                 }
-                QVariantMap instancesVListItemMap = instancesVListItem.toMap();
-                Settings::InstanceDescription instanceMap;
-                for ( auto it = instancesVListItemMap.constBegin(); it != instancesVListItemMap.constEnd(); ++it )
-                {
-                    if ( it.value().type() != QVariant::String )
-                    {
-                        continue;
-                    }
-                    instanceMap.insert( it.key(), it.value().toString() );
-                }
-                customInstances.append( instanceMap );
+                customInstances.append( InstanceDescription( instancesVListItem.toMap() ) );
             }
         }
     }
@@ -169,14 +182,14 @@ interpretSequence( const YAML::Node& node, Settings::ModuleSequence& moduleSeque
                 continue;
             }
             QString thisActionS = sequenceVListItem.toMap().firstKey();
-            ModuleAction thisAction;
+            ModuleSystem::Action thisAction;
             if ( thisActionS == "show" )
             {
-                thisAction = ModuleAction::Show;
+                thisAction = ModuleSystem::Action::Show;
             }
             else if ( thisActionS == "exec" )
             {
-                thisAction = ModuleAction::Exec;
+                thisAction = ModuleSystem::Action::Exec;
             }
             else
             {
@@ -193,8 +206,8 @@ interpretSequence( const YAML::Node& node, Settings::ModuleSequence& moduleSeque
     }
 }
 
-Settings::Settings( const QString& settingsFilePath, bool debugMode, QObject* parent )
-    : QObject( parent )
+Settings::Settings( const QString& settingsFilePath, bool debugMode )
+    : QObject()
     , m_debug( debugMode )
     , m_doChroot( true )
     , m_promptInstall( false )
@@ -223,6 +236,7 @@ Settings::Settings( const QString& settingsFilePath, bool debugMode, QObject* pa
             m_isSetupMode = requireBool( config, "oem-setup", !m_doChroot );
             m_disableCancel = requireBool( config, "disable-cancel", false );
             m_disableCancelDuringExec = requireBool( config, "disable-cancel-during-exec", false );
+            m_quitAtEnd = requireBool( config, "quit-at-end", false );
         }
         catch ( YAML::Exception& e )
         {
@@ -265,37 +279,93 @@ Settings::brandingComponentName() const
     return m_brandingComponentName;
 }
 
-
-bool
-Settings::showPromptBeforeExecution() const
+static QStringList
+settingsFileCandidates( bool assumeBuilddir )
 {
-    return m_promptInstall;
+    static const char settings[] = "settings.conf";
+
+    QStringList settingsPaths;
+    if ( CalamaresUtils::isAppDataDirOverridden() )
+    {
+        settingsPaths << CalamaresUtils::appDataDir().absoluteFilePath( settings );
+    }
+    else
+    {
+        if ( assumeBuilddir )
+        {
+            settingsPaths << QDir::current().absoluteFilePath( settings );
+        }
+        if ( CalamaresUtils::haveExtraDirs() )
+            for ( auto s : CalamaresUtils::extraConfigDirs() )
+            {
+                settingsPaths << ( s + settings );
+            }
+        settingsPaths << CMAKE_INSTALL_FULL_SYSCONFDIR "/calamares/settings.conf";  // String concat
+        settingsPaths << CalamaresUtils::appDataDir().absoluteFilePath( settings );
+    }
+
+    return settingsPaths;
 }
 
-
-bool
-Settings::debugMode() const
+Settings*
+Settings::init( bool debugMode )
 {
-    return m_debug;
+    if ( s_instance )
+    {
+        cWarning() << "Calamares::Settings already created";
+        return s_instance;
+    }
+
+    QStringList settingsFileCandidatesByPriority = settingsFileCandidates( debugMode );
+
+    QFileInfo settingsFile;
+    bool found = false;
+
+    foreach ( const QString& path, settingsFileCandidatesByPriority )
+    {
+        QFileInfo pathFi( path );
+        if ( pathFi.exists() && pathFi.isReadable() )
+        {
+            settingsFile = pathFi;
+            found = true;
+            break;
+        }
+    }
+
+    if ( !found || !settingsFile.exists() || !settingsFile.isReadable() )
+    {
+        cError() << "Cowardly refusing to continue startup without settings."
+                 << Logger::DebugList( settingsFileCandidatesByPriority );
+        if ( CalamaresUtils::isAppDataDirOverridden() )
+        {
+            cError() << "FATAL: explicitly configured application data directory is missing settings.conf";
+        }
+        else
+        {
+            cError() << "FATAL: none of the expected configuration file paths exist.";
+        }
+        ::exit( EXIT_FAILURE );
+    }
+
+    auto* settings = new Calamares::Settings( settingsFile.absoluteFilePath(), debugMode );  // Creates singleton
+    if ( settings->modulesSequence().count() < 1 )
+    {
+        cError() << "FATAL: no sequence set.";
+        ::exit( EXIT_FAILURE );
+    }
+
+    return settings;
 }
 
-bool
-Settings::doChroot() const
+Settings*
+Settings::init( const QString& path )
 {
-    return m_doChroot;
+    if ( s_instance )
+    {
+        cWarning() << "Calamares::Settings already created";
+        return s_instance;
+    }
+    return new Calamares::Settings( path, true );
 }
-
-bool
-Settings::disableCancel() const
-{
-    return m_disableCancel;
-}
-
-bool
-Settings::disableCancelDuringExec() const
-{
-    return m_disableCancelDuringExec;
-}
-
 
 }  // namespace Calamares

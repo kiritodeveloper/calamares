@@ -1,6 +1,7 @@
 /* === This file is part of Calamares - <https://github.com/calamares> ===
  *
  *   Copyright 2014, Aurélien Gâteau <agateau@kde.org>
+ *   Copyright 2019, Adriaan de Groot <groot@kde.org>
  *
  *   Calamares is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -19,12 +20,13 @@
 #ifndef PARTITIONJOB_H
 #define PARTITIONJOB_H
 
-#include <Job.h>
+#include "Job.h"
+#include "partition/KPMManager.h"
 
 class Partition;
 
 /**
- * Base class for jobs which affect a partition.
+ * Base class for jobs which affect a partition and which use KPMCore.
  */
 class PartitionJob : public Calamares::Job
 {
@@ -32,10 +34,7 @@ class PartitionJob : public Calamares::Job
 public:
     PartitionJob( Partition* partition );
 
-    Partition* partition() const
-    {
-        return m_partition;
-    }
+    Partition* partition() const { return m_partition; }
 
 public slots:
     /** @brief Translate from KPMCore to Calamares progress.
@@ -46,6 +45,7 @@ public slots:
     void iprogress( int percent );
 
 protected:
+    CalamaresUtils::Partition::KPMManager m_kpmcore;
     Partition* m_partition;
 };
 

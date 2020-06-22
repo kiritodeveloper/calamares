@@ -19,7 +19,8 @@
 #ifndef PACKAGECHOOSERVIEWSTEP_H
 #define PACKAGECHOOSERVIEWSTEP_H
 
-#include "PluginDllMacro.h"
+#include "DllMacro.h"
+#include "locale/TranslatableConfiguration.h"
 #include "utils/PluginFactory.h"
 #include "viewpages/ViewStep.h"
 
@@ -49,6 +50,7 @@ public:
     bool isAtBeginning() const override;
     bool isAtEnd() const override;
 
+    void onActivate() override;
     void onLeave() override;
 
     Calamares::JobList jobs() const override;
@@ -65,6 +67,8 @@ private:
     // Configuration
     PackageChooserMode m_mode;
     QString m_id;
+    CalamaresUtils::Locale::TranslatedString* m_stepName;  // As it appears in the sidebar
+    QModelIndex m_defaultIdx;
 };
 
 CALAMARES_PLUGIN_FACTORY_DECLARATION( PackageChooserViewStepFactory )

@@ -1,7 +1,7 @@
 /* === This file is part of Calamares - <https://github.com/calamares> ===
- *
- *   Copyright 2014-2015, Teo Mrnjavac <teo@kde.org>
- *   Copyright 2017-2019, Adriaan de Groot <groot@kde.org>
+ * 
+ *   SPDX-FileCopyrightText: 2014-2015 Teo Mrnjavac <teo@kde.org>
+ *   SPDX-FileCopyrightText: 2017-2019 Adriaan de Groot <groot@kde.org>
  *
  *   Calamares is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -15,12 +15,17 @@
  *
  *   You should have received a copy of the GNU General Public License
  *   along with Calamares. If not, see <http://www.gnu.org/licenses/>.
+ *
+ *   SPDX-License-Identifier: GPL-3.0-or-later
+ *   License-Filename: LICENSE
+ *
  */
 
 #ifndef LOCALE_LABEL_H
 #define LOCALE_LABEL_H
 
 #include <QLocale>
+#include <QObject>
 #include <QString>
 
 namespace CalamaresUtils
@@ -35,8 +40,10 @@ namespace Locale
  * translation system) into QLocales, and also into consistent
  * human-readable text labels.
  */
-class Label
+class Label : public QObject
 {
+    Q_OBJECT
+
 public:
     /** @brief Formatting option for label -- add (country) to label. */
     enum class LabelFormat
@@ -46,7 +53,7 @@ public:
     };
 
     /** @brief Empty locale. This uses the system-default locale. */
-    Label();
+    Label( QObject* parent = nullptr );
 
     /** @brief Construct from a locale name.
      *
@@ -54,7 +61,10 @@ public:
      * The @p format determines whether the country name is always present
      * in the label (human-readable form) or only if needed for disambiguation.
      */
-    Label( const QString& localeName, LabelFormat format = LabelFormat::IfNeededWithCountry );
+    Label( const QString& localeName,
+           LabelFormat format = LabelFormat::IfNeededWithCountry,
+           QObject* parent = nullptr );
+
 
     /** @brief Define a sorting order.
      *
@@ -67,7 +77,7 @@ public:
      * en_US and en (American English) is defined as English. The Queen's
      * English -- proper English -- is relegated to non-English status.
      */
-    bool isEnglish() const { return m_localeId == QLatin1Literal( "en_US" ) || m_localeId == QLatin1Literal( "en" ); }
+    bool isEnglish() const { return m_localeId == QLatin1String( "en_US" ) || m_localeId == QLatin1String( "en" ); }
 
     /** @brief Get the human-readable name for this locale. */
     QString label() const { return m_label; }
@@ -94,8 +104,6 @@ public:
     static QLocale getLocale( const QString& localeName );
 
 protected:
-    void setLabels( const QString& name, LabelFormat format );
-
     QLocale m_locale;
     QString m_localeId;  // the locale identifier, e.g. "en_GB"
     QString m_label;  // the native name of the locale

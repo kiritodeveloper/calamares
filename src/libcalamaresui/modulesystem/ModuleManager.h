@@ -20,7 +20,9 @@
 #ifndef MODULELOADER_H
 #define MODULELOADER_H
 
-#include "Requirement.h"
+#include "modulesystem/Descriptor.h"
+#include "modulesystem/InstanceKey.h"
+#include "modulesystem/Requirement.h"
 
 #include <QObject>
 #include <QStringList>
@@ -30,7 +32,7 @@ namespace Calamares
 {
 
 class Module;
-struct RequirementEntry;  // from Requirement.h
+class RequirementsModel;
 
 /**
  * @brief The ModuleManager class is a singleton which manages Calamares modules.
@@ -60,14 +62,14 @@ public:
      * modules.
      * @return a QStringList with the instance keys.
      */
-    QStringList loadedInstanceKeys();
+    QList< ModuleSystem::InstanceKey > loadedInstanceKeys();
 
     /**
      * @brief moduleDescriptor returns the module descriptor structure for a given module.
      * @param name the name of the module for which to return the module descriptor.
      * @return the module descriptor, as a variant map already parsed from YAML.
      */
-    QVariantMap moduleDescriptor( const QString& name );
+    ModuleSystem::Descriptor moduleDescriptor( const QString& name );
 
     /**
      * @brief moduleInstance returns a Module object for a given instance key.
@@ -77,16 +79,28 @@ public:
     Module* moduleInstance( const QString& instanceKey );
 
     /**
-     * @brief loadModules initiates the asynchronous module loading operation.
+     * @brief loadModules does all of the module loading operation.
      * When this is done, the signal modulesLoaded is emitted.
+     * It is recommended to call this from a single-shot QTimer.
      */
     void loadModules();
 
     /**
+     * @brief Adds a single module (loaded by some other means)
+     *
+     * Returns @c true on success (that is, the module's dependencies
+     * are satisfied, it wasn't already loaded, ...).
+     */
+    bool addModule( Module* );
+
+    /**
      * @brief Starts asynchronous requirements checking for each module.
-     * When this is done, the signal modulesChecked is emitted.
+     * When this is done, the signal requirementsComplete is emitted.
      */
     void checkRequirements();
+
+    ///@brief Gets the model that requirements-checking works on.
+    RequirementsModel* requirementsModel() { return m_requirementsModel; }
 
 signals:
     void initDone();
@@ -94,8 +108,6 @@ signals:
     void modulesFailed( QStringList );  /// .. or not
     // Below, see RequirementsChecker documentation
     void requirementsComplete( bool );
-    void requirementsResult( RequirementsList );
-    void requirementsProgress( const QString& );
 
 private slots:
     void doInit();
@@ -103,15 +115,17 @@ private slots:
 private:
     /**
      * Check in a general sense whether the dependencies between
-     * modules are valid. Returns a list of module names that
-     * do **not** have their requirements met.
+     * modules are valid. Returns the number of modules that
+     * have missing dependencies -- this is **not** a problem
+     * unless any of those modules are actually used.
      *
-     * Returns an empty list on success.
+     * Returns 0 on success.
      *
      * Also modifies m_availableDescriptorsByModuleName to remove
-     * all the entries that fail.
+     * all the entries that (so that later, when we try to look
+     * them up, they are not found).
      */
-    QStringList checkDependencies();
+    size_t checkDependencies();
 
     /**
      * Check for this specific module if its required modules have
@@ -119,12 +133,13 @@ private:
      *
      * Returns true if the requirements are met.
      */
-    bool checkDependencies( const Module& );
+    bool checkModuleDependencies( const Module& );
 
-    QMap< QString, QVariantMap > m_availableDescriptorsByModuleName;
+    QMap< QString, ModuleSystem::Descriptor > m_availableDescriptorsByModuleName;
     QMap< QString, QString > m_moduleDirectoriesByModuleName;
-    QMap< QString, Module* > m_loadedModulesByInstanceKey;
+    QMap< ModuleSystem::InstanceKey, Module* > m_loadedModulesByInstanceKey;
     const QStringList m_paths;
+    RequirementsModel* m_requirementsModel;
 
     static ModuleManager* s_instance;
 };

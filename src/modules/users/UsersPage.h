@@ -29,6 +29,8 @@
 
 #include <QWidget>
 
+class QLabel;
+
 namespace Ui
 {
 class Page_UserSetup;
@@ -48,6 +50,8 @@ public:
     void onActivate();
 
     void setWriteRootPassword( bool show );
+    void setPasswordCheckboxVisible( bool visible );
+    void setValidatePasswordDefault( bool checked );
     void setAutologinDefault( bool checked );
     void setReusePasswordDefault( bool checked );
 
@@ -58,6 +62,13 @@ public:
      * the key. Supported keys are documented in users.conf.
      */
     void addPasswordCheck( const QString& key, const QVariant& value );
+
+    ///@brief Hostname as entered / auto-filled
+    QString getHostname() const;
+    ///@brief Root password, depends on settings, may be empty
+    QString getRootPassword() const;
+    ///@brief User name and password
+    QPair< QString, QString > getUserPassword() const;
 
 protected slots:
     void onFullNameTextEdited( const QString& );
@@ -73,15 +84,20 @@ signals:
     void checkReady( bool );
 
 private:
+    /** @brief Is the password acceptable?
+     *
+     * Checks the two copies of the password and places error messages in the
+     * given QLabels. Returns true (and clears the error messages) if the
+     * password is acceptable.
+     */
+    bool checkPasswordAcceptance( const QString& pw1, const QString& pw2, QLabel* badge, QLabel* message );
+
+    void retranslate();
+
     Ui::Page_UserSetup* ui;
 
     PasswordCheckList m_passwordChecks;
-
-    const QRegExp USERNAME_RX = QRegExp( "^[a-z_][a-z0-9_-]*[$]?$" );
-    const QRegExp HOSTNAME_RX = QRegExp( "^[a-zA-Z0-9][-a-zA-Z0-9_]*$" );
-    const int USERNAME_MAX_LENGTH = 31;
-    const int HOSTNAME_MIN_LENGTH = 2;
-    const int HOSTNAME_MAX_LENGTH = 63;
+    bool m_passwordChecksChanged = false;
 
     bool m_readyFullName;
     bool m_readyUsername;
@@ -94,4 +110,4 @@ private:
     bool m_writeRootPassword;
 };
 
-#endif // USERSPAGE_H
+#endif  // USERSPAGE_H

@@ -1,6 +1,7 @@
 /* === This file is part of Calamares - <https://github.com/calamares> ===
- *
- *   Copyright 2019, Adriaan de Groot <groot@kde.org>
+ * 
+ *   SPDX-FileCopyrightText: 2019 Camilo Higuita <milo.h@aol.com>
+ *   SPDX-FileCopyrightText: 2019-2020 Adriaan de Groot <groot@kde.org>
  *
  *   Calamares is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -14,6 +15,10 @@
  *
  *   You should have received a copy of the GNU General Public License
  *   along with Calamares. If not, see <http://www.gnu.org/licenses/>.
+ *
+ *   SPDX-License-Identifier: GPL-3.0-or-later
+ *   License-Filename: LICENSE
+ *
  */
 
 #ifndef LOCALE_LABELMODEL_H
@@ -33,6 +38,8 @@ namespace Locale
 
 class DLLEXPORT LabelModel : public QAbstractListModel
 {
+    Q_OBJECT
+
 public:
     enum
     {
@@ -46,6 +53,7 @@ public:
     int rowCount( const QModelIndex& parent ) const override;
 
     QVariant data( const QModelIndex& index, int role ) const override;
+    QHash< int, QByteArray > roleNames() const override;
 
     /** @brief Gets locale information for entry #n
      *
@@ -53,6 +61,9 @@ public:
      * returns a reference to en_US.
      */
     const Label& locale( int row ) const;
+
+    /// @brief Returns all of the locale Ids (e.g. en_US) put into this model.
+    const QStringList& localeIds() const { return m_localeIds; }
 
     /** @brief Searches for an item that matches @p predicate
      *
@@ -66,7 +77,8 @@ public:
     int find( const QString& countryCode ) const;
 
 private:
-    QVector< Label > m_locales;
+    QVector< Label* > m_locales;
+    QStringList m_localeIds;
 };
 
 /** @brief Returns a model with all available translations.

@@ -1,7 +1,7 @@
 /* === This file is part of Calamares - <https://github.com/calamares> ===
  *
  *   Copyright 2014-2017, Teo Mrnjavac <teo@kde.org>
- *   Copyright 2017-2018, Adriaan de Groot <groot@kde.org>
+ *   Copyright 2017-2018, 2020, Adriaan de Groot <groot@kde.org>
  *   Copyright 2017, Gabriel Craciunescu <crazy@frugalware.org>
  *   Copyright 2019, Collabora Ltd <arnaud.ferraris@collabora.com>
  *
@@ -24,35 +24,29 @@
 #include "CheckerContainer.h"
 #include "partman_devices.h"
 
+#include "Settings.h"
 #include "modulesystem/Requirement.h"
-#include "widgets/WaitingWidget.h"
+#include "network/Manager.h"
 #include "utils/CalamaresUtilsGui.h"
+#include "utils/CalamaresUtilsSystem.h"
 #include "utils/Logger.h"
 #include "utils/Retranslator.h"
-#include "utils/CalamaresUtilsSystem.h"
 #include "utils/Units.h"
-#include "Settings.h"
+#include "utils/Variant.h"
+#include "widgets/WaitingWidget.h"
 
-#include "JobQueue.h"
 #include "GlobalStorage.h"
+#include "JobQueue.h"
 
-#include <QApplication>
-#include <QBoxLayout>
 #include <QDBusConnection>
 #include <QDBusInterface>
-#include <QDesktopWidget>
 #include <QDir>
-#include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
-#include <QLabel>
-#include <QNetworkAccessManager>
-#include <QNetworkRequest>
-#include <QNetworkReply>
-#include <QProcess>
-#include <QTimer>
+#include <QGuiApplication>
+#include <QScreen>
 
-#include <unistd.h> //geteuid
+#include <unistd.h>  //geteuid
 
 GeneralRequirements::GeneralRequirements( QObject* parent )
     : QObject( parent )
@@ -61,99 +55,167 @@ GeneralRequirements::GeneralRequirements( QObject* parent )
 {
 }
 
-Calamares::RequirementsList GeneralRequirements::checkRequirements()
+static QSize
+biggestSingleScreen()
 {
-    QSize availableSize = qApp->desktop()->availableGeometry().size();
+    QSize s;
+    for ( const auto* screen : QGuiApplication::screens() )
+    {
+        QSize thisScreen = screen->availableSize();
+        if ( !s.isValid() || ( s.width() * s.height() < thisScreen.width() * thisScreen.height() ) )
+        {
+            s = thisScreen;
+        }
+    }
+    return s;
+}
 
-    bool enoughStorage = false;
-    bool enoughRam = false;
-    bool hasPower = false;
-    bool hasInternet = false;
-    bool isRoot = false;
-    bool enoughScreen = (availableSize.width() >= CalamaresUtils::windowMinimumWidth) && (availableSize.height() >= CalamaresUtils::windowMinimumHeight);
+/** @brief Distinguish has-not-been-checked-at-all from false.
+ *
+ */
+struct MaybeChecked
+{
+    bool hasBeenChecked = false;
+    bool value = false;
 
-    qint64 requiredStorageB = CalamaresUtils::GiBtoBytes(m_requiredStorageGiB);
+    MaybeChecked& operator=( bool b )
+    {
+        hasBeenChecked = true;
+        value = b;
+        return *this;
+    }
+
+    operator bool() const { return value; }
+};
+
+QDebug&
+operator<<( QDebug& s, const MaybeChecked& c )
+{
+    if ( c.hasBeenChecked )
+    {
+        s << c.value;
+    }
+    else
+    {
+        s << "unchecked";
+    }
+    return s;
+}
+
+Calamares::RequirementsList
+GeneralRequirements::checkRequirements()
+{
+    QSize availableSize = biggestSingleScreen();
+
+    MaybeChecked enoughStorage;
+    MaybeChecked enoughRam;
+    MaybeChecked hasPower;
+    MaybeChecked hasInternet;
+    MaybeChecked isRoot;
+    bool enoughScreen = availableSize.isValid() && ( availableSize.width() >= CalamaresUtils::windowMinimumWidth )
+        && ( availableSize.height() >= CalamaresUtils::windowMinimumHeight );
+
+    qint64 requiredStorageB = CalamaresUtils::GiBtoBytes( m_requiredStorageGiB );
     cDebug() << "Need at least storage bytes:" << requiredStorageB;
     if ( m_entriesToCheck.contains( "storage" ) )
+    {
         enoughStorage = checkEnoughStorage( requiredStorageB );
+    }
 
-    qint64 requiredRamB = CalamaresUtils::GiBtoBytes(m_requiredRamGiB);
+    qint64 requiredRamB = CalamaresUtils::GiBtoBytes( m_requiredRamGiB );
     cDebug() << "Need at least ram bytes:" << requiredRamB;
     if ( m_entriesToCheck.contains( "ram" ) )
+    {
         enoughRam = checkEnoughRam( requiredRamB );
+    }
 
     if ( m_entriesToCheck.contains( "power" ) )
+    {
         hasPower = checkHasPower();
+    }
 
     if ( m_entriesToCheck.contains( "internet" ) )
+    {
         hasInternet = checkHasInternet();
+    }
 
     if ( m_entriesToCheck.contains( "root" ) )
+    {
         isRoot = checkIsRoot();
+    }
 
-    using TR = Logger::DebugRow<const char *, bool>;
-    cDebug() << "GeneralRequirements output:"
-                    << TR("enoughStorage", enoughStorage)
-                    << TR("enoughRam", enoughRam)
-                    << TR("hasPower", hasPower)
-                    << TR("hasInternet", hasInternet)
-                    << TR("isRoot", isRoot);
+    using TR = Logger::DebugRow< const char*, MaybeChecked >;
+    cDebug() << "GeneralRequirements output:" << TR( "enoughStorage", enoughStorage ) << TR( "enoughRam", enoughRam )
+             << TR( "hasPower", hasPower ) << TR( "hasInternet", hasInternet ) << TR( "isRoot", isRoot );
 
     Calamares::RequirementsList checkEntries;
     foreach ( const QString& entry, m_entriesToCheck )
     {
         if ( entry == "storage" )
-            checkEntries.append( {
-                entry,
-                [req=m_requiredStorageGiB]{ return tr( "has at least %1 GiB available drive space" ).arg( req ); },
-                [req=m_requiredStorageGiB]{ return tr( "There is not enough drive space. At least %1 GiB is required." ).arg( req ); },
-                enoughStorage,
-                m_entriesToRequire.contains( entry )
-            } );
+        {
+            checkEntries.append(
+                { entry,
+                  [ req = m_requiredStorageGiB ] {
+                      return tr( "has at least %1 GiB available drive space" ).arg( req );
+                  },
+                  [ req = m_requiredStorageGiB ] {
+                      return tr( "There is not enough drive space. At least %1 GiB is required." ).arg( req );
+                  },
+                  enoughStorage,
+                  m_entriesToRequire.contains( entry ) } );
+        }
         else if ( entry == "ram" )
-            checkEntries.append( {
-                entry,
-                [req=m_requiredRamGiB]{ return tr( "has at least %1 GiB working memory" ).arg( req ); },
-                [req=m_requiredRamGiB]{ return tr( "The system does not have enough working memory. At least %1 GiB is required." ).arg( req ); },
-                enoughRam,
-                m_entriesToRequire.contains( entry )
-            } );
+        {
+            checkEntries.append(
+                { entry,
+                  [ req = m_requiredRamGiB ] { return tr( "has at least %1 GiB working memory" ).arg( req ); },
+                  [ req = m_requiredRamGiB ] {
+                      return tr( "The system does not have enough working memory. At least %1 GiB is required." )
+                          .arg( req );
+                  },
+                  enoughRam,
+                  m_entriesToRequire.contains( entry ) } );
+        }
         else if ( entry == "power" )
-            checkEntries.append( {
-                entry,
-                []{ return tr( "is plugged in to a power source" ); },
-                []{ return tr( "The system is not plugged in to a power source." ); },
-                hasPower,
-                m_entriesToRequire.contains( entry )
-            } );
+        {
+            checkEntries.append( { entry,
+                                   [] { return tr( "is plugged in to a power source" ); },
+                                   [] { return tr( "The system is not plugged in to a power source." ); },
+                                   hasPower,
+                                   m_entriesToRequire.contains( entry ) } );
+        }
         else if ( entry == "internet" )
-            checkEntries.append( {
-                entry,
-                []{ return tr( "is connected to the Internet" ); },
-                []{ return tr( "The system is not connected to the Internet." ); },
-                hasInternet,
-                m_entriesToRequire.contains( entry )
-            } );
+        {
+            checkEntries.append( { entry,
+                                   [] { return tr( "is connected to the Internet" ); },
+                                   [] { return tr( "The system is not connected to the Internet." ); },
+                                   hasInternet,
+                                   m_entriesToRequire.contains( entry ) } );
+        }
         else if ( entry == "root" )
-            checkEntries.append( {
-                entry,
-                []{ return QString(); }, //we hide it
-                []{ return Calamares::Settings::instance()->isSetupMode()
-                            ? tr( "The setup program is not running with administrator rights." )
-                            : tr( "The installer is not running with administrator rights." ); },
-                isRoot,
-                m_entriesToRequire.contains( entry )
-            } );
+        {
+            checkEntries.append( { entry,
+                                   [] { return tr( "is running the installer as an administrator (root)" ); },
+                                   [] {
+                                       return Calamares::Settings::instance()->isSetupMode()
+                                           ? tr( "The setup program is not running with administrator rights." )
+                                           : tr( "The installer is not running with administrator rights." );
+                                   },
+                                   isRoot,
+                                   m_entriesToRequire.contains( entry ) } );
+        }
         else if ( entry == "screen" )
-            checkEntries.append( {
-                entry,
-                []{ return QString(); }, // we hide it
-                []{ return Calamares::Settings::instance()->isSetupMode()
-                            ? tr( "The screen is too small to display the setup program." )
-                            : tr( "The screen is too small to display the installer." ); },
-                enoughScreen,
-                false
-            } );
+        {
+            checkEntries.append( { entry,
+                                   [] { return tr( "has a screen large enough to show the whole installer" ); },
+                                   [] {
+                                       return Calamares::Settings::instance()->isSetupMode()
+                                           ? tr( "The screen is too small to display the setup program." )
+                                           : tr( "The screen is too small to display the installer." );
+                                   },
+                                   enoughScreen,
+                                   false } );
+        }
     }
     return checkEntries;
 }
@@ -164,8 +226,7 @@ GeneralRequirements::setConfigurationMap( const QVariantMap& configurationMap )
 {
     bool incompleteConfiguration = false;
 
-    if ( configurationMap.contains( "check" ) &&
-         configurationMap.value( "check" ).type() == QVariant::List )
+    if ( configurationMap.contains( "check" ) && configurationMap.value( "check" ).type() == QVariant::List )
     {
         m_entriesToCheck.clear();
         m_entriesToCheck.append( configurationMap.value( "check" ).toStringList() );
@@ -176,8 +237,7 @@ GeneralRequirements::setConfigurationMap( const QVariantMap& configurationMap )
         incompleteConfiguration = true;
     }
 
-    if ( configurationMap.contains( "required" ) &&
-         configurationMap.value( "required" ).type() == QVariant::List )
+    if ( configurationMap.contains( "required" ) && configurationMap.value( "required" ).type() == QVariant::List )
     {
         m_entriesToRequire.clear();
         m_entriesToRequire.append( configurationMap.value( "required" ).toStringList() );
@@ -202,11 +262,13 @@ GeneralRequirements::setConfigurationMap( const QVariantMap& configurationMap )
     // Help out with consistency, but don't fix
     for ( const auto& r : m_entriesToRequire )
         if ( !m_entriesToCheck.contains( r ) )
+        {
             cWarning() << "GeneralRequirements requires" << r << "but does not check it.";
+        }
 
-    if ( configurationMap.contains( "requiredStorage" ) &&
-         ( configurationMap.value( "requiredStorage" ).type() == QVariant::Double ||
-           configurationMap.value( "requiredStorage" ).type() == QVariant::Int ) )
+    if ( configurationMap.contains( "requiredStorage" )
+         && ( configurationMap.value( "requiredStorage" ).type() == QVariant::Double
+              || configurationMap.value( "requiredStorage" ).type() == QVariant::LongLong ) )
     {
         bool ok = false;
         m_requiredStorageGiB = configurationMap.value( "requiredStorage" ).toDouble( &ok );
@@ -225,9 +287,9 @@ GeneralRequirements::setConfigurationMap( const QVariantMap& configurationMap )
         incompleteConfiguration = true;
     }
 
-    if ( configurationMap.contains( "requiredRam" ) &&
-         ( configurationMap.value( "requiredRam" ).type() == QVariant::Double ||
-           configurationMap.value( "requiredRam" ).type() == QVariant::Int ) )
+    if ( configurationMap.contains( "requiredRam" )
+         && ( configurationMap.value( "requiredRam" ).type() == QVariant::Double
+              || configurationMap.value( "requiredRam" ).type() == QVariant::LongLong ) )
     {
         bool ok = false;
         m_requiredRamGiB = configurationMap.value( "requiredRam" ).toDouble( &ok );
@@ -245,26 +307,29 @@ GeneralRequirements::setConfigurationMap( const QVariantMap& configurationMap )
         incompleteConfiguration = true;
     }
 
-    if ( configurationMap.contains( "internetCheckUrl" ) &&
-         configurationMap.value( "internetCheckUrl" ).type() == QVariant::String )
+    QUrl checkInternetUrl;
+    QString checkInternetSetting = CalamaresUtils::getString( configurationMap, "internetCheckUrl" );
+    if ( !checkInternetSetting.isEmpty() )
     {
-        m_checkHasInternetUrl = configurationMap.value( "internetCheckUrl" ).toString().trimmed();
-        if ( m_checkHasInternetUrl.isEmpty() ||
-             !QUrl( m_checkHasInternetUrl ).isValid() )
+        checkInternetUrl = QUrl( checkInternetSetting.trimmed() );
+        if ( !checkInternetUrl.isValid() )
         {
-            cWarning() << "GeneralRequirements entry 'internetCheckUrl' is invalid in welcome.conf" << m_checkHasInternetUrl
-                     << "reverting to default (http://example.com).";
-            m_checkHasInternetUrl = "http://example.com";
+            cWarning() << "GeneralRequirements entry 'internetCheckUrl' is invalid in welcome.conf"
+                       << checkInternetSetting << "reverting to default (http://example.com).";
+            checkInternetUrl = QUrl( "http://example.com" );
             incompleteConfiguration = true;
         }
     }
     else
     {
         cWarning() << "GeneralRequirements entry 'internetCheckUrl' is undefined in welcome.conf,"
-                    "reverting to default (http://example.com).";
-
-        m_checkHasInternetUrl = "http://example.com";
+                      "reverting to default (http://example.com).";
+        checkInternetUrl = "http://example.com";
         incompleteConfiguration = true;
+    }
+    if ( checkInternetUrl.isValid() )
+    {
+        CalamaresUtils::Network::Manager::instance().setCheckHasInternetUrl( checkInternetUrl );
     }
 
     if ( incompleteConfiguration )
@@ -293,7 +358,7 @@ GeneralRequirements::checkEnoughRam( qint64 requiredRam )
     // Ignore the guesstimate-factor; we get an under-estimate
     // which is probably the usable RAM for programs.
     quint64 availableRam = CalamaresUtils::System::instance()->getTotalMemoryB().first;
-    return availableRam >= requiredRam * 0.95; // because MemTotal is variable
+    return availableRam >= requiredRam * 0.95;  // because MemTotal is variable
 }
 
 
@@ -303,19 +368,22 @@ GeneralRequirements::checkBatteryExists()
     const QFileInfo basePath( "/sys/class/power_supply" );
 
     if ( !( basePath.exists() && basePath.isDir() ) )
+    {
         return false;
+    }
 
     QDir baseDir( basePath.absoluteFilePath() );
     const auto entries = baseDir.entryList( QDir::AllDirs | QDir::Readable | QDir::NoDotAndDotDot );
-    for ( const auto &item : entries )
+    for ( const auto& item : entries )
     {
-        QFileInfo typePath( baseDir.absoluteFilePath( QString( "%1/type" )
-                                                      .arg( item ) ) );
+        QFileInfo typePath( baseDir.absoluteFilePath( QString( "%1/type" ).arg( item ) ) );
         QFile typeFile( typePath.absoluteFilePath() );
         if ( typeFile.open( QIODevice::ReadOnly | QIODevice::Text ) )
         {
             if ( typeFile.readAll().startsWith( "Battery" ) )
+            {
                 return true;
+            }
         }
     }
 
@@ -331,13 +399,12 @@ GeneralRequirements::checkHasPower()
     const QString UPOWER_PATH( "/org/freedesktop/UPower" );
 
     if ( !checkBatteryExists() )
+    {
         return true;
+    }
 
     cDebug() << "A battery exists, checking for mains power.";
-    QDBusInterface upowerIntf( UPOWER_SVC_NAME,
-                               UPOWER_PATH,
-                               UPOWER_INTF_NAME,
-                               QDBusConnection::systemBus() );
+    QDBusInterface upowerIntf( UPOWER_SVC_NAME, UPOWER_PATH, UPOWER_INTF_NAME, QDBusConnection::systemBus() );
 
     bool onBattery = upowerIntf.property( "OnBattery" ).toBool();
 
@@ -357,22 +424,8 @@ GeneralRequirements::checkHasPower()
 bool
 GeneralRequirements::checkHasInternet()
 {
-    // default to true in the QNetworkAccessManager::UnknownAccessibility case
-    QNetworkAccessManager qnam;
-    bool hasInternet = qnam.networkAccessible() == QNetworkAccessManager::Accessible;
-
-    if ( !hasInternet && qnam.networkAccessible() == QNetworkAccessManager::UnknownAccessibility )
-    {
-        QNetworkRequest req = QNetworkRequest( QUrl( m_checkHasInternetUrl ) );
-        QNetworkReply* reply = qnam.get( req );
-        QEventLoop loop;
-        connect( reply, &QNetworkReply::finished,
-                 &loop, &QEventLoop::quit );
-        loop.exec();
-        if( reply->bytesAvailable() )
-            hasInternet = true;
-    }
-
+    auto& nam = CalamaresUtils::Network::Manager::instance();
+    bool hasInternet = nam.checkHasInternet();
     Calamares::JobQueue::instance()->globalStorage()->insert( "hasInternet", hasInternet );
     return hasInternet;
 }

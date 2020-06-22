@@ -45,7 +45,13 @@ def modify_grub_default(partitions, root_mount_point, distributor):
 
     :param partitions:
     :param root_mount_point:
-    :param distributor:
+    :param distributor: name of the distributor to fill in for
+        GRUB_DISTRIBUTOR. Must be a string. If the job setting
+        *keepDistributor* is set, then this is only used if no
+        GRUB_DISTRIBUTOR is found at all (otherwise, when *keepDistributor*
+        is set, the GRUB_DISTRIBUTOR lines are left unchanged).
+        If *keepDistributor* is unset or false, then GRUB_DISTRIBUTOR
+        is always updated to set this value.
     :return:
     """
     default_dir = os.path.join(root_mount_point, "etc/default")
@@ -66,6 +72,12 @@ def modify_grub_default(partitions, root_mount_point, distributor):
     swap_uuid = ""
     swap_outer_uuid = ""
     swap_outer_mappername = None
+    no_save_default = False
+
+    for partition in partitions:
+        if partition["mountPoint"] in ("/", "/boot") and partition["fs"] in ("btrfs", "f2fs"):
+            no_save_default = True
+            break
 
     if have_plymouth:
         use_splash = "splash"
@@ -74,6 +86,9 @@ def modify_grub_default(partitions, root_mount_point, distributor):
 
     if have_dracut:
         for partition in partitions:
+            if partition["fs"] == "linuxswap" and not partition.get("claimed", None):
+                # Skip foreign swap
+                continue
             has_luks = "luksMapperName" in partition
             if partition["fs"] == "linuxswap" and not has_luks:
                 swap_uuid = partition["uuid"]
@@ -88,9 +103,15 @@ def modify_grub_default(partitions, root_mount_point, distributor):
                     ]
     else:
         for partition in partitions:
+            if partition["fs"] == "linuxswap" and not partition.get("claimed", None):
+                # Skip foreign swap
+                continue
             has_luks = "luksMapperName" in partition
             if partition["fs"] == "linuxswap" and not has_luks:
                 swap_uuid = partition["uuid"]
+
+            if (partition["fs"] == "linuxswap" and has_luks):
+                swap_outer_mappername = partition["luksMapperName"]
 
             if (partition["mountPoint"] == "/" and has_luks):
                 cryptdevice_params = [
@@ -98,9 +119,6 @@ def modify_grub_default(partitions, root_mount_point, distributor):
                         partition["luksUuid"], partition["luksMapperName"]
                         ),
                     "root=/dev/mapper/{!s}".format(
-                        partition["luksMapperName"]
-                        ),
-                    "resume=/dev/mapper/{!s}".format(
                         partition["luksMapperName"]
                         )
                 ]
@@ -118,7 +136,7 @@ def modify_grub_default(partitions, root_mount_point, distributor):
 
     if have_dracut and swap_outer_uuid:
         kernel_params.append("rd.luks.uuid={!s}".format(swap_outer_uuid))
-    if have_dracut and swap_outer_mappername:
+    if swap_outer_mappername:
         kernel_params.append("resume=/dev/mapper/{!s}".format(
             swap_outer_mappername))
 
@@ -172,8 +190,16 @@ def modify_grub_default(partitions, root_mount_point, distributor):
                 have_kernel_cmd = True
             elif (lines[i].startswith("#GRUB_DISTRIBUTOR")
                   or lines[i].startswith("GRUB_DISTRIBUTOR")):
-                lines[i] = distributor_line
-                have_distributor_line = True
+                if libcalamares.job.configuration.get("keepDistributor", False):
+                    lines[i] = distributor_line
+                    have_distributor_line = True
+                else:
+                    # We're not updating because of *keepDistributor*, but if
+                    # this was a comment line, then it's still not been set.
+                    have_distributor_line = have_distributor_line or not lines[i].startswith("#")
+            # If btrfs or f2fs is used, don't save default
+            if no_save_default and lines[i].startswith("GRUB_SAVEDEFAULT="):
+                lines[i] = "#GRUB_SAVEDEFAULT=\"true\""
     else:
         lines = []
 
