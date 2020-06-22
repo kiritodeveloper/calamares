@@ -8,12 +8,12 @@
 #include "FreeBSDJob.h"
 
 #include "CalamaresVersion.h"
-#include "JobQueue.h"
 #include "GlobalStorage.h"
+#include "JobQueue.h"
 #include "utils/Logger.h"
 
-#include <QProcess>
 #include <QDateTime>
+#include <QProcess>
 #include <QThread>
 
 
@@ -23,9 +23,7 @@ FreeBSDJob::FreeBSDJob( QObject* parent )
 }
 
 
-FreeBSDJob::~FreeBSDJob()
-{
-}
+FreeBSDJob::~FreeBSDJob() {}
 
 
 QString
@@ -57,4 +55,4 @@ FreeBSDJob::setConfigurationMap( const QVariantMap& configurationMap )
     m_configurationMap = configurationMap;
 }
 
-CALAMARES_PLUGIN_FACTORY_DEFINITION( FreeBSDJobFactory, registerPlugin<FreeBSDJob>(); )
+CALAMARES_PLUGIN_FACTORY_DEFINITION( FreeBSDJobFactory, registerPlugin< FreeBSDJob >(); )

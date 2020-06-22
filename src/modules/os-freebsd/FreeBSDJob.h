@@ -9,10 +9,8 @@
 #define FREEBSDJOB_H
 
 #include "CppJob.h"
-
+#include "DllMacro.h"
 #include "utils/PluginFactory.h"
-
-#include "PluginDllMacro.h"
 
 #include <QObject>
 #include <QVariantMap>
@@ -38,4 +36,4 @@ private:
 
 CALAMARES_PLUGIN_FACTORY_DECLARATION( FreeBSDJobFactory )
 
-#endif // FREEBSDJOB_H
+#endif  // FREEBSDJOB_H
