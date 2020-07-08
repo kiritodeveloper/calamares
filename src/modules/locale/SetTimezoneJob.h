@@ -21,12 +21,13 @@
 
 #include "Job.h"
 
+#include "locale/TimeZone.h"
 
 class SetTimezoneJob : public Calamares::Job
 {
     Q_OBJECT
 public:
-    SetTimezoneJob( const QString& region, const QString& zone );
+    SetTimezoneJob( const CalamaresUtils::Locale::TZZone& zone );
 
     QString prettyName() const override;
     Calamares::JobResult exec() override;

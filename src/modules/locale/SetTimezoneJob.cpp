@@ -29,10 +29,10 @@
 #include <QFileInfo>
 
 
-SetTimezoneJob::SetTimezoneJob( const QString& region, const QString& zone )
+SetTimezoneJob::SetTimezoneJob( const CalamaresUtils::Locale::TZZone& zone )
     : Calamares::Job()
-    , m_region( region )
-    , m_zone( zone )
+    , m_region( zone.region() )
+    , m_zone( zone.country() )
 {
 }
 
