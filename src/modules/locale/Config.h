@@ -86,8 +86,6 @@ private:
 
     QStringList m_localeGenLines;
     int m_currentRegion = -1;
-
-    bool m_blockTzWidgetSet;
 };
 
 

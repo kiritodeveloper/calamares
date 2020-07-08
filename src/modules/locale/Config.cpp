@@ -42,7 +42,6 @@ Config::Config( QObject* parent )
     , m_regionList( CalamaresUtils::Locale::TZRegion::fromZoneTab() )
     , m_regionModel( new CalamaresUtils::Locale::CStringListModel( m_regionList ) )
     , m_zonesModel( new CalamaresUtils::Locale::CStringListModel() )
-    , m_blockTzWidgetSet( false )
 {
     connect( m_regionModel, &CalamaresUtils::Locale::CStringListModel::currentIndexChanged, [&]() {
         m_zonesModel->setList( static_cast< const CalamaresUtils::Locale::TZRegion* >(
