@@ -99,14 +99,12 @@ LocaleQmlViewStep::prettyName() const
 bool
 LocaleQmlViewStep::isNextEnabled() const
 {
-    // TODO: should return true
     return true;
 }
 
 bool
 LocaleQmlViewStep::isBackEnabled() const
 {
-    // TODO: should return true (it's weird that you are not allowed to have welcome *after* anything
     return true;
 }
 
@@ -114,7 +112,6 @@ LocaleQmlViewStep::isBackEnabled() const
 bool
 LocaleQmlViewStep::isAtBeginning() const
 {
-    // TODO: adjust to "pages" in the QML
     return true;
 }
 
@@ -122,7 +119,6 @@ LocaleQmlViewStep::isAtBeginning() const
 bool
 LocaleQmlViewStep::isAtEnd() const
 {
-    // TODO: adjust to "pages" in the QML
     return true;
 }
 
