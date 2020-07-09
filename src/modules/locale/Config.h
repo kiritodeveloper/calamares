@@ -41,13 +41,14 @@ public:
     Config( QObject* parent = nullptr );
     ~Config();
 
-    CalamaresUtils::Locale::CStringListModel* regionModel() const;
-    CalamaresUtils::Locale::CStringListModel* zonesModel() const;
-
     void setLocaleInfo( const QString& initialRegion, const QString& initialZone, const QString& localeGenPath );
 
     Calamares::JobList createJobs();
     QMap< QString, QString > localesMap();
+
+public Q_SLOTS:
+    CalamaresUtils::Locale::CStringListModel* regionModel() const;
+    CalamaresUtils::Locale::CStringListModel* zonesModel() const;
 
     /** @brief The status for the summary before the exec: step
      *
