@@ -20,17 +20,46 @@
 #ifndef LOCALE_CONFIG_H
 #define LOCALE_CONFIG_H
 
+#include "geoip/Handler.h"
+
 #include <QObject>
 
 class Config : public QObject
 {
     Q_OBJECT
 
+    /// @brief Current region (America, Asia, ..) for the timezone
+    Q_PROPERTY( QString currentRegion READ currentRegion NOTIFY currentRegionChanged )
+    /// @brief Current zone (Amsterdam, Karachi, Kentucky/Monticello)
+    Q_PROPERTY( QString currentZone READ currentZone NOTIFY currentZoneChanged )
+
 public:
     Config( QObject* parent = nullptr );
     ~Config() override;
 
     void setConfigurationMap( const QVariantMap& );
+
+    /** @brief synchronous GeoIP lookup
+     *
+     * Because this is synchronous, call it from somewhere other than
+     * the UI thread. It is recommended to do this in checkRequirements()
+     * of the view step, because that is a threaded, synchronous-friendly,
+     * part of the startup of Calamares.
+     */
+    void doGeoIPLookup();
+
+public Q_SLOTS:
+    QString currentRegion() const { return m_currentTimezone.first; }
+    QString currentZone() const { return m_currentTimezone.second; }
+
+signals:
+    void currentRegionChanged();
+    void currentZoneChanged();
+
+private:
+    std::unique_ptr< CalamaresUtils::GeoIP::Handler > m_geoip;
+    CalamaresUtils::GeoIP::RegionZonePair m_startingTimezone;
+    CalamaresUtils::GeoIP::RegionZonePair m_currentTimezone;
 };
 
 
