@@ -48,6 +48,7 @@ Config::setConfigurationMap( const QVariantMap& configurationMap )
     m_currentTimezone = m_startingTimezone;
     emit currentRegionChanged();
     emit currentZoneChanged();
+    emit currentLocationChanged( m_currentTimezone );
 
     bool ok = false;
     QVariantMap geoip = CalamaresUtils::getSubMap( configurationMap, "geoip", ok );
@@ -87,6 +88,7 @@ Config::doGeoIPLookup()
             }
             emit currentRegionChanged();
             emit currentZoneChanged();
+            emit currentLocationChanged( m_currentTimezone );
         }
     }
 }

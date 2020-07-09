@@ -55,6 +55,7 @@ public Q_SLOTS:
 signals:
     void currentRegionChanged();
     void currentZoneChanged();
+    void currentLocationChanged( CalamaresUtils::GeoIP::RegionZonePair );
 
 private:
     std::unique_ptr< CalamaresUtils::GeoIP::Handler > m_geoip;
