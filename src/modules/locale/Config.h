@@ -41,6 +41,8 @@ public:
     Config( QObject* parent = nullptr );
     ~Config();
 
+    void setConfigurationMap( const QVariantMap& );
+
     void setLocaleInfo( const QString& initialRegion, const QString& initialZone, const QString& localeGenPath );
 
     Calamares::JobList createJobs();
@@ -85,7 +87,9 @@ private:
 
     LocaleConfiguration m_selectedLocaleConfiguration;
 
+    QString m_localeGenPath;
     QStringList m_localeGenLines;
+
     int m_currentRegion = -1;
 };
 

@@ -32,6 +32,7 @@
 #include "utils/CalamaresUtilsGui.h"
 #include "utils/Logger.h"
 #include "utils/Retranslator.h"
+#include "utils/Variant.h"
 
 #include <QDebug>
 #include <QFile>
@@ -327,4 +328,13 @@ const CalamaresUtils::Locale::TZZone*
 Config::currentLocation() const
 {
     return static_cast< const CalamaresUtils::Locale::TZZone* >( m_zonesModel->item( m_zonesModel->currentIndex() ) );
+}
+
+void Config::setConfigurationMap( const QVariantMap& configurationMap )
+{
+    m_localeGenPath = CalamaresUtils::getString( configurationMap, "localeGenPath" );
+    if ( m_localeGenPath.isEmpty() )
+    {
+        m_localeGenPath = QStringLiteral( "/etc/locale.gen" );
+    }
 }
