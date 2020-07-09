@@ -106,8 +106,14 @@ signals:
     void initDone();
     void modulesLoaded();  /// All of the modules were loaded successfully
     void modulesFailed( QStringList );  /// .. or not
-    // Below, see RequirementsChecker documentation
-    void requirementsComplete( bool );
+
+    /** @brief requirements checking is completed
+     *
+     * The @p canContinue flag indicates whether all the **mandatory**
+     * requirements are satisfied (if any of them fail, installation
+     * can not continue).
+     */
+    void requirementsComplete( bool canContinue );
 
 private slots:
     void doInit();
